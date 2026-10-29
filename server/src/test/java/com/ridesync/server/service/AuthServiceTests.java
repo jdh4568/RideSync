@@ -4,6 +4,7 @@ import com.ridesync.server.dto.SignupRequest;
 import com.ridesync.server.entity.User;
 import com.ridesync.server.exception.ApiException;
 import com.ridesync.server.repository.UserRepository;
+import com.ridesync.server.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,7 +25,7 @@ class AuthServiceTests {
     @BeforeEach
     void setUp() {
         repository = mock(UserRepository.class);
-        service = new AuthService(repository, encoder);
+        service = new AuthService(repository, encoder, mock(JwtTokenProvider.class));
         request = new SignupRequest();
         request.setLoginId("rider");
         request.setNickname("라이더");

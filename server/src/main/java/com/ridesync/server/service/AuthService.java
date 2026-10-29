@@ -1,6 +1,9 @@
 package com.ridesync.server.service;
 
 import com.ridesync.server.dto.AvailabilityResponse;
+import com.ridesync.server.dto.LoginRequest;
+import com.ridesync.server.dto.LoginResponse;
+import com.ridesync.server.security.JwtTokenProvider;
 import com.ridesync.server.dto.SignupRequest;
 import com.ridesync.server.dto.SignupResponse;
 import com.ridesync.server.entity.User;
@@ -23,6 +26,23 @@ import java.time.Instant;
 public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider tokenProvider;
+
+    public LoginResponse login(LoginRequest request) {
+        if (request.getPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw invalidCredentials();
+        }
+        User user = userRepository.findByLoginId(request.getLoginId())
+                .orElseThrow(this::invalidCredentials);
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw invalidCredentials();
+        }
+        return new LoginResponse(tokenProvider.createToken(user.getId()), user.getId(), user.getNickname());
+    }
+
+    private ApiException invalidCredentials() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "아이디 또는 비밀번호가 올바르지 않습니다.");
+    }
 
     public AvailabilityResponse checkLoginId(String loginId) {
         return new AvailabilityResponse(!userRepository.existsByLoginId(loginId));

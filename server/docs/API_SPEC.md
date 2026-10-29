@@ -31,6 +31,30 @@
 Authorization: Bearer JWT_TOKEN
 ```
 
+- Access Token의 기본 유효기간은 1시간이다. Refresh Token은 현재 MVP 범위에 포함하지 않는다.
+- JWT의 `sub`에는 사용자 ID가 들어가며, HS256 서명 및 만료 시각을 검증한다.
+- 보호 API의 토큰 누락은 401(`UNAUTHORIZED`), 만료·변조·잘못된 토큰 또는 삭제된 사용자는 401(`INVALID_TOKEN`)로 응답한다.
+- 공개 인증 API는 Authorization 헤더 없이 호출한다. 헤더를 보내면 해당 토큰도 검증한다.
+
+로컬 실행 시 JWT 환경변수를 설정할 필요가 없다. 설정이 없으면 공통 개발용 기본키와 유효기간 1시간을 사용한다. 기존 MySQL 연결 설정은 별도로 필요하다.
+
+필요한 경우에만 다음 환경변수로 덮어쓸 수 있다:
+
+| 이름 | 설명 |
+|---|---|
+| `JWT_SECRET` | 선택. 기본키 대신 사용할 키. 무작위 32바이트 이상의 키를 Base64로 인코딩한 값. |
+| `JWT_EXPIRATION_SECONDS` | 선택. 토큰 유효기간(초), 기본값 `3600`. 양수여야 한다. |
+
+기본키는 GitHub에 공개되는 로컬 시연용 키이므로 실제 서비스에는 사용하지 않는다. 직접 설정한 키가 잘못된 형식이거나 길이가 부족하면 서버가 시작되지 않는다. 키를 변경하면 기존 토큰을 사용할 수 없으므로 다시 로그인한다.
+
+IntelliJ에서 `ServerApplication`을 실행하거나 PowerShell에서 다음 명령으로 실행한다:
+
+```powershell
+.\gradlew.bat bootRun
+```
+
+이미 IntelliJ 실행 설정에 `JWT_SECRET`을 등록했다면 해당 값이 우선 적용된다. 공통 기본키를 사용하려면 해당 항목을 삭제한다. 인증된 사용자 ID는 Controller에서 `@AuthenticationPrincipal Long userId`로 받는다.
+
 ---
 
 ## 2. 로그인 화면
@@ -62,6 +86,7 @@ Response
 
 - 로그인 아이디와 비밀번호를 검증한다.
 - 인증 성공 시 JWT를 발급한다.
+- 성공 시 HTTP 200으로 응답한다. 없는 아이디와 잘못된 비밀번호는 동일하게 401(`INVALID_CREDENTIALS`)로 응답한다.
 - Android는 JWT를 저장한다.
 - 로그인 성공 후 `/ws/login` WebSocket에 연결한다.
 - 연결이 완료되면 메인 화면으로 이동한다.

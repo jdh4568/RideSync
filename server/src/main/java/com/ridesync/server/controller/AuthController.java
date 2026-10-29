@@ -1,6 +1,8 @@
 package com.ridesync.server.controller;
 
 import com.ridesync.server.dto.AvailabilityResponse;
+import com.ridesync.server.dto.LoginRequest;
+import com.ridesync.server.dto.LoginResponse;
 import com.ridesync.server.dto.SignupRequest;
 import com.ridesync.server.dto.SignupResponse;
 import com.ridesync.server.service.AuthService;
@@ -16,6 +18,11 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request);
+    }
 
     @GetMapping("/check-login-id")
     public AvailabilityResponse checkLoginId(
