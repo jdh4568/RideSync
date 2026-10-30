@@ -24,6 +24,56 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({GroupService.class, SecurityConfig.class, JwtTokenProvider.class})
 class GroupControllerTests {
     @Test
+    void requestListRequiresOwnerAndReturnsEmptyArray() throws Exception {
+        mvc.perform(get("/api/v1/groups/join-requests")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/groups/join-requests").header("Authorization", token()))
+                .andExpect(status().isForbidden());
+        when(groups.existsByOwner_Id(7L)).thenReturn(true);
+        mvc.perform(get("/api/v1/groups/join-requests").header("Authorization", token()))
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+        verify(members).findPendingRequests(7L);
+    }
+
+    @Test
+    void decisionsEnforceOwnerPendingStateAndCapacity() throws Exception {
+        var owner = new User();
+        owner.setId(7L);
+        var group = new com.ridesync.server.entity.RidingGroup();
+        group.setOwner(owner);
+        group.setMaxMembers(2);
+        for (String action : new String[]{"approve", "reject"}) {
+            String path = "/api/v1/groups/12/requests/9/" + action;
+            mvc.perform(post(path)).andExpect(status().isUnauthorized());
+            when(groups.findByIdForUpdate(12L)).thenReturn(Optional.empty());
+            mvc.perform(post(path).header("Authorization", token())).andExpect(status().isNotFound());
+            when(groups.findByIdForUpdate(12L)).thenReturn(Optional.of(group));
+            owner.setId(8L);
+            mvc.perform(post(path).header("Authorization", token())).andExpect(status().isForbidden());
+            owner.setId(7L);
+            when(members.findByGroup_IdAndUser_Id(12L, 9L)).thenReturn(Optional.empty());
+            mvc.perform(post(path).header("Authorization", token())).andExpect(status().isNotFound());
+            var member = new com.ridesync.server.entity.GroupMember();
+            when(members.findByGroup_IdAndUser_Id(12L, 9L)).thenReturn(Optional.of(member));
+            for (String state : new String[]{"APPROVED", "REJECTED"}) {
+                member.setStatus(state);
+                mvc.perform(post(path).header("Authorization", token())).andExpect(status().isConflict());
+                assertEquals(state, member.getStatus());
+            }
+            member.setStatus("PENDING");
+            when(members.findByGroup_IdAndStatus(12L, "APPROVED")).thenReturn(java.util.List.of(member, member));
+            if (action.equals("approve")) {
+                mvc.perform(post(path).header("Authorization", token()))
+                        .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("GROUP_FULL"));
+                assertEquals("PENDING", member.getStatus());
+                when(members.findByGroup_IdAndStatus(12L, "APPROVED")).thenReturn(java.util.List.of());
+            }
+            mvc.perform(post(path).header("Authorization", token())).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.groupId").value(12))
+                    .andExpect(jsonPath("$.userId").value(9))
+                    .andExpect(jsonPath("$.status").value(action.equals("approve") ? "APPROVED" : "REJECTED"));
+        }
+    }
+    @Test
     void joinUsesAuthenticatedUserAndNoRequestBody() throws Exception {
         var group = new com.ridesync.server.entity.RidingGroup();
         group.setId(12L);

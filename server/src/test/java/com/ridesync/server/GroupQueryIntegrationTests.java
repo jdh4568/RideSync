@@ -21,6 +21,81 @@ class GroupQueryIntegrationTests {
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Test
+    void pendingRequestsAreOwnerScopedAndDecisionsRemoveThem() {
+        User owner = user();
+        User applicant = user();
+        RidingGroup first = group(owner);
+        RidingGroup second = group(owner);
+        RidingGroup unrelated = group(user());
+        service.joinGroup(applicant.getId(), first.getId());
+        service.joinGroup(applicant.getId(), second.getId());
+        service.joinGroup(applicant.getId(), unrelated.getId());
+        var requests = service.getJoinRequests(owner.getId());
+        assertEquals(2, requests.size());
+        assertEquals(applicant.getNickname(), requests.get(0).getNickname());
+        assertEquals(first.getGroupName(), requests.get(0).getGroupName());
+        assertNotNull(requests.get(0).getGroupMemberId());
+        assertEquals("APPROVED", service.approveRequest(owner.getId(), first.getId(), applicant.getId()).getStatus());
+        assertEquals("REJECTED", service.rejectRequest(owner.getId(), second.getId(), applicant.getId()).getStatus());
+        members.flush();
+        assertTrue(service.getJoinRequests(owner.getId()).isEmpty());
+        assertNotNull(members.findByGroup_IdAndUser_Id(first.getId(), applicant.getId()).orElseThrow().getJoinedAt());
+        assertNull(members.findByGroup_IdAndUser_Id(second.getId(), applicant.getId()).orElseThrow().getJoinedAt());
+    }
+
+    @Test
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void concurrentApprovalsCannotExceedCapacity() throws Exception {
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        Long[] ids = tx.execute(s -> {
+            User owner = user();
+            User a = user();
+            User b = user();
+            RidingGroup g = group(owner);
+            g.setMaxMembers(2);
+            member(g, a, "MEMBER", "PENDING");
+            member(g, b, "MEMBER", "PENDING");
+            return new Long[]{g.getId(), owner.getId(), a.getId(), b.getId()};
+        });
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.function.Function<Long, String> approve = id -> {
+                try {
+                    start.await();
+                    return service.approveRequest(ids[1], ids[0], id).getStatus();
+                } catch (com.ridesync.server.exception.ApiException e) {
+                    return e.getCode();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            };
+            var a = pool.submit(() -> approve.apply(ids[2]));
+            var b = pool.submit(() -> approve.apply(ids[3]));
+            start.countDown();
+            var results = java.util.List.of(a.get(20, java.util.concurrent.TimeUnit.SECONDS),
+                    b.get(20, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(1, java.util.Collections.frequency(results, "APPROVED"));
+            assertEquals(1, java.util.Collections.frequency(results, "GROUP_FULL"));
+            assertEquals(2L, jdbc.queryForObject(
+                    "select count(*) from group_member where group_id = ? and status = 'APPROVED'",
+                    Long.class, ids[0]));
+            assertEquals(1L, jdbc.queryForObject(
+                    "select count(*) from group_member where group_id = ? and status = 'PENDING'",
+                    Long.class, ids[0]));
+        } finally {
+            pool.shutdownNow();
+            pool.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS);
+            tx.executeWithoutResult(s -> {
+                jdbc.update("delete from group_member where group_id = ?", ids[0]);
+                jdbc.update("delete from riding_group where group_id = ?", ids[0]);
+                jdbc.update("delete from user where user_id in (?, ?, ?)", ids[1], ids[2], ids[3]);
+            });
+        }
+    }
+
+    @Test
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void concurrentApplicationsCreateOnlyOneRow() throws Exception {
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);

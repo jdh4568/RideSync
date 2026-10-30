@@ -8,6 +8,7 @@ import com.ridesync.server.dto.MyGroupResponse;
 import java.util.List;
 
 public interface RidingGroupRepository extends JpaRepository<RidingGroup, Long> {
+    boolean existsByOwner_Id(Long userId);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select g from RidingGroup g where g.id = :groupId")
     java.util.Optional<RidingGroup> findByIdForUpdate(@Param("groupId") Long groupId);

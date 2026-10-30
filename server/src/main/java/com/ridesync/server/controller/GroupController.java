@@ -12,12 +12,31 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import com.ridesync.server.dto.GroupListResponse;
 import com.ridesync.server.dto.MyGroupResponse;
+import com.ridesync.server.dto.GroupJoinRequestResponse;
+import com.ridesync.server.dto.GroupRequestDecisionResponse;
 
 @RestController
 @RequestMapping("/api/v1/groups")
 @RequiredArgsConstructor
 public class GroupController {
     private final GroupService groupService;
+
+    @GetMapping("/join-requests")
+    public List<GroupJoinRequestResponse> getJoinRequests(@AuthenticationPrincipal Long ownerId) {
+        return groupService.getJoinRequests(ownerId);
+    }
+
+    @PostMapping("/{groupId}/requests/{userId}/approve")
+    public GroupRequestDecisionResponse approveRequest(@AuthenticationPrincipal Long ownerId,
+            @PathVariable Long groupId, @PathVariable Long userId) {
+        return groupService.approveRequest(ownerId, groupId, userId);
+    }
+
+    @PostMapping("/{groupId}/requests/{userId}/reject")
+    public GroupRequestDecisionResponse rejectRequest(@AuthenticationPrincipal Long ownerId,
+            @PathVariable Long groupId, @PathVariable Long userId) {
+        return groupService.rejectRequest(ownerId, groupId, userId);
+    }
 
     @PostMapping("/{groupId}/join")
     public JoinGroupResponse joinGroup(

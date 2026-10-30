@@ -18,6 +18,8 @@ import java.time.Instant;
 import java.util.List;
 import com.ridesync.server.dto.GroupListResponse;
 import com.ridesync.server.dto.MyGroupResponse;
+import com.ridesync.server.dto.GroupJoinRequestResponse;
+import com.ridesync.server.dto.GroupRequestDecisionResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,47 @@ public class GroupService {
     private final RidingGroupRepository groupRepository;
     private final GroupMemberRepository memberRepository;
     private final UserRepository userRepository;
+
+    public List<GroupJoinRequestResponse> getJoinRequests(Long ownerId) {
+        if (!groupRepository.existsByOwner_Id(ownerId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "소유한 그룹이 없습니다.");
+        }
+        return memberRepository.findPendingRequests(ownerId);
+    }
+
+    @Transactional
+    public GroupRequestDecisionResponse approveRequest(Long ownerId, Long groupId, Long userId) {
+        return decideRequest(ownerId, groupId, userId, true);
+    }
+
+    @Transactional
+    public GroupRequestDecisionResponse rejectRequest(Long ownerId, Long groupId, Long userId) {
+        return decideRequest(ownerId, groupId, userId, false);
+    }
+
+    private GroupRequestDecisionResponse decideRequest(Long ownerId, Long groupId, Long userId,
+                                                       boolean approve) {
+        RidingGroup group = groupRepository.findByIdForUpdate(groupId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
+                        "GROUP_NOT_FOUND", "존재하지 않는 그룹입니다."));
+        if (!group.getOwner().getId().equals(ownerId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "해당 그룹장만 처리할 수 있습니다.");
+        }
+        GroupMember member = memberRepository.findByGroup_IdAndUser_Id(groupId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
+                        "JOIN_REQUEST_NOT_FOUND", "존재하지 않는 가입 신청입니다."));
+        if (!"PENDING".equals(member.getStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "JOIN_REQUEST_CONFLICT",
+                    "대기 중인 가입 신청만 처리할 수 있습니다.");
+        }
+        if (approve && memberRepository.findByGroup_IdAndStatus(groupId, "APPROVED").size()
+                >= group.getMaxMembers()) {
+            throw new ApiException(HttpStatus.CONFLICT, "GROUP_FULL", "그룹 최대 인원에 도달했습니다.");
+        }
+        member.setStatus(approve ? "APPROVED" : "REJECTED");
+        member.setJoinedAt(approve ? Instant.now() : null);
+        return new GroupRequestDecisionResponse(groupId, userId, member.getStatus());
+    }
 
     @Transactional
     public JoinGroupResponse joinGroup(Long userId, Long groupId) {
