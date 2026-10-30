@@ -14,6 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
+import java.util.List;
+import com.ridesync.server.dto.GroupListResponse;
+import com.ridesync.server.dto.MyGroupResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +25,14 @@ public class GroupService {
     private final RidingGroupRepository groupRepository;
     private final GroupMemberRepository memberRepository;
     private final UserRepository userRepository;
+
+    public List<GroupListResponse> getGroups(Long userId) {
+        return groupRepository.findGroupList(userId);
+    }
+
+    public List<MyGroupResponse> getMyGroups(Long userId) {
+        return groupRepository.findMyGroups(userId);
+    }
 
     @Transactional
     public CreateGroupResponse createGroup(Long userId, CreateGroupRequest request) {

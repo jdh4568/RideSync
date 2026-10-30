@@ -8,12 +8,25 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
+import com.ridesync.server.dto.GroupListResponse;
+import com.ridesync.server.dto.MyGroupResponse;
 
 @RestController
 @RequestMapping("/api/v1/groups")
 @RequiredArgsConstructor
 public class GroupController {
     private final GroupService groupService;
+
+    @GetMapping
+    public List<GroupListResponse> getGroups(@AuthenticationPrincipal Long userId) {
+        return groupService.getGroups(userId);
+    }
+
+    @GetMapping("/my")
+    public List<MyGroupResponse> getMyGroups(@AuthenticationPrincipal Long userId) {
+        return groupService.getMyGroups(userId);
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

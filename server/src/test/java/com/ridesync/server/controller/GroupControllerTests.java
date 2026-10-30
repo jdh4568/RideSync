@@ -17,11 +17,31 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(GroupController.class)
 @Import({GroupService.class, SecurityConfig.class, JwtTokenProvider.class})
 class GroupControllerTests {
+    @Test
+    void listEndpointsUseJwtIdentityAndReturnEmptyArrays() throws Exception {
+        for (String path : new String[]{"/api/v1/groups", "/api/v1/groups/my"}) {
+            mvc.perform(get(path).header("Authorization", token()))
+                    .andExpect(status().isOk()).andExpect(content().json("[]"));
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        }
+        verify(groups).findGroupList(7L);
+        verify(groups).findMyGroups(7L);
+    }
+
+    @Test
+    void listResponsePreservesNullMembershipFields() throws Exception {
+        when(groups.findGroupList(7L)).thenReturn(java.util.List.of(
+                new com.ridesync.server.dto.GroupListResponse(12L, "한강", null, 1L, 20, null, null)));
+        mvc.perform(get("/api/v1/groups").header("Authorization", token()))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[{\"groupId\":12,\"groupName\":\"한강\",\"description\":null,\"memberCount\":1,\"maxMembers\":20,\"membershipStatus\":null,\"myRole\":null}]"));
+    }
     @Autowired MockMvc mvc;
     @Autowired JwtTokenProvider tokens;
     @MockitoBean UserRepository users;
