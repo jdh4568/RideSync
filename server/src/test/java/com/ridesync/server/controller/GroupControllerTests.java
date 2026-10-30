@@ -24,6 +24,42 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({GroupService.class, SecurityConfig.class, JwtTokenProvider.class})
 class GroupControllerTests {
     @Test
+    void joinUsesAuthenticatedUserAndNoRequestBody() throws Exception {
+        var group = new com.ridesync.server.entity.RidingGroup();
+        group.setId(12L);
+        when(groups.findByIdForUpdate(12L)).thenReturn(Optional.of(group));
+        mvc.perform(post("/api/v1/groups/12/join").header("Authorization", token()))
+                .andExpect(status().isOk())
+                .andExpect(content().json("{\"groupId\":12,\"status\":\"PENDING\"}"));
+        verify(members).findByGroup_IdAndUser_Id(12L, 7L);
+        verify(members).save(argThat(m -> m.getUser().getId().equals(7L)
+                && m.getStatus().equals("PENDING") && m.getRole().equals("MEMBER")));
+    }
+
+    @Test
+    void joinRejectsMissingGroupAndUnauthenticatedRequest() throws Exception {
+        mvc.perform(post("/api/v1/groups/12/join")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/groups/12/join").header("Authorization", token()))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("GROUP_NOT_FOUND"));
+        verify(members, never()).save(any());
+    }
+
+    @Test
+    void joinRejectsPendingAndApprovedIncludingOwner() throws Exception {
+        when(groups.findByIdForUpdate(12L)).thenReturn(Optional.of(new com.ridesync.server.entity.RidingGroup()));
+        for (String state : new String[]{"PENDING", "APPROVED"}) {
+            var member = new com.ridesync.server.entity.GroupMember();
+            member.setStatus(state);
+            member.setRole(state.equals("APPROVED") ? "OWNER" : "MEMBER");
+            when(members.findByGroup_IdAndUser_Id(12L, 7L)).thenReturn(Optional.of(member));
+            mvc.perform(post("/api/v1/groups/12/join").header("Authorization", token()))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("GROUP_JOIN_CONFLICT"));
+            assertEquals(state, member.getStatus());
+        }
+        verify(members, never()).save(any());
+    }
+    @Test
     void listEndpointsUseJwtIdentityAndReturnEmptyArrays() throws Exception {
         for (String path : new String[]{"/api/v1/groups", "/api/v1/groups/my"}) {
             mvc.perform(get(path).header("Authorization", token()))

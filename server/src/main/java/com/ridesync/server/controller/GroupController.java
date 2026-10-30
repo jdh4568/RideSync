@@ -1,6 +1,7 @@
 package com.ridesync.server.controller;
 
 import com.ridesync.server.dto.CreateGroupRequest;
+import com.ridesync.server.dto.JoinGroupResponse;
 import com.ridesync.server.dto.CreateGroupResponse;
 import com.ridesync.server.service.GroupService;
 import jakarta.validation.Valid;
@@ -17,6 +18,12 @@ import com.ridesync.server.dto.MyGroupResponse;
 @RequiredArgsConstructor
 public class GroupController {
     private final GroupService groupService;
+
+    @PostMapping("/{groupId}/join")
+    public JoinGroupResponse joinGroup(
+            @AuthenticationPrincipal Long userId, @PathVariable Long groupId) {
+        return groupService.joinGroup(userId, groupId);
+    }
 
     @GetMapping
     public List<GroupListResponse> getGroups(@AuthenticationPrincipal Long userId) {
