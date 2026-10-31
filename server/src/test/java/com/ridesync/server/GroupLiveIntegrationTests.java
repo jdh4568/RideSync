@@ -72,6 +72,17 @@ class GroupLiveIntegrationTests {
         throw new AssertionError("그룹 목록에 생성한 그룹이 없습니다.");
     }
 
+    private void awaitMemberOnline(String path, Account viewer, long userId, boolean expected) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        do {
+            for (JsonNode row : call("GET", path, viewer, null, 200)) {
+                if (row.get("userId").asLong() == userId && row.get("online").asBoolean() == expected) return;
+            }
+            Thread.sleep(20);
+        } while (System.nanoTime() < deadline);
+        fail("그룹원 online 값이 기대 상태로 변경되지 않았습니다.");
+    }
+
     private void cleanup() {
         for (String name : accounts) {
             var ids = jdbc.queryForList("select user_id from user where login_id = ?", Long.class, name);
@@ -131,6 +142,23 @@ class GroupLiveIntegrationTests {
             assertEquals(1, mine.size());
             assertEquals(first, mine.get(0).get("groupId").asLong());
             assertEquals("MEMBER", mine.get(0).get("role").asText());
+            String memberPath = root + "/members";
+            JsonNode memberList = call("GET", memberPath, applicant, null, 200);
+            assertEquals(2, memberList.size());
+            assertEquals(4, memberList.get(0).size());
+            assertFalse(memberList.get(1).get("online").asBoolean());
+            var socket = client.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(5))
+                    .header("Authorization", "Bearer " + applicant.token())
+                    .buildAsync(URI.create("ws://127.0.0.1:" + port + "/ws/login"), new WebSocket.Listener() {})
+                    .get(10, java.util.concurrent.TimeUnit.SECONDS);
+            try {
+                awaitMemberOnline(memberPath, owner, applicant.id(), true);
+                socket.sendClose(WebSocket.NORMAL_CLOSURE, "done").get(5, java.util.concurrent.TimeUnit.SECONDS);
+                awaitMemberOnline(memberPath, owner, applicant.id(), false);
+            } finally {
+                socket.abort();
+            }
+            call("GET", memberPath, other, null, 403);
             call("POST", decision + "/reject", owner, null, 409);
             call("POST", root + "/join", applicant, null, 409);
             call("POST", root + "/join", other, null, 200);

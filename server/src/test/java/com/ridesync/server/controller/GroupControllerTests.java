@@ -23,6 +23,35 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(GroupController.class)
 @Import({GroupService.class, SecurityConfig.class, JwtTokenProvider.class})
 class GroupControllerTests {
+    @MockitoBean com.ridesync.server.websocket.OnlineUserRegistry onlineUsers;
+
+    @Test
+    void memberListRequiresAuthenticationExistingGroupAndApprovedMembership() throws Exception {
+        String path = "/api/v1/groups/12/members";
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(get(path).header("Authorization", token())).andExpect(status().isNotFound());
+        when(groups.existsById(12L)).thenReturn(true);
+        mvc.perform(get(path).header("Authorization", token())).andExpect(status().isForbidden());
+        verify(members, never()).findApprovedMembers(any());
+        when(members.existsByGroup_IdAndUser_IdAndStatus(12L, 7L, "APPROVED")).thenReturn(true);
+        var me = new User();
+        me.setId(7L);
+        me.setNickname("나");
+        var other = new User();
+        other.setId(9L);
+        other.setNickname("동료");
+        var a = new com.ridesync.server.entity.GroupMember();
+        a.setUser(me);
+        a.setRole("OWNER");
+        var b = new com.ridesync.server.entity.GroupMember();
+        b.setUser(other);
+        b.setRole("MEMBER");
+        when(members.findApprovedMembers(12L)).thenReturn(java.util.List.of(a, b));
+        when(onlineUsers.isOnline(7L)).thenReturn(true);
+        mvc.perform(get(path).header("Authorization", token())).andExpect(status().isOk())
+                .andExpect(content().json("[{\"userId\":7,\"nickname\":\"나\",\"role\":\"OWNER\",\"online\":true},"
+                        + "{\"userId\":9,\"nickname\":\"동료\",\"role\":\"MEMBER\",\"online\":false}]"));
+    }
     @Test
     void requestListRequiresOwnerAndReturnsEmptyArray() throws Exception {
         mvc.perform(get("/api/v1/groups/join-requests")).andExpect(status().isUnauthorized());

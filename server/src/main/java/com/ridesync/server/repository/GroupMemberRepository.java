@@ -9,6 +9,15 @@ import java.util.List;
 import com.ridesync.server.dto.GroupJoinRequestResponse;
 
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
+    boolean existsByGroup_IdAndUser_IdAndStatus(Long groupId, Long userId, String status);
+
+    @Query("""
+            select m from GroupMember m join fetch m.user
+            where m.group.id = :groupId and m.status = 'APPROVED'
+            order by m.id
+            """)
+    List<GroupMember> findApprovedMembers(@Param("groupId") Long groupId);
+
     @Query("""
             select new com.ridesync.server.dto.GroupJoinRequestResponse(
                 m.id, g.id, g.groupName, u.id, u.nickname, m.status)

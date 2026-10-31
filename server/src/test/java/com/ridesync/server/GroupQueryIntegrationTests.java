@@ -21,6 +21,32 @@ class GroupQueryIntegrationTests {
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Test
+    void memberListIncludesSelfAndApprovedOnlyAndDeniesOtherStates() {
+        User owner = user();
+        User approved = user();
+        User pending = user();
+        User rejected = user();
+        User outsider = user();
+        RidingGroup g = group(owner);
+        member(g, approved, "MEMBER", "APPROVED");
+        member(g, pending, "MEMBER", "PENDING");
+        member(g, rejected, "MEMBER", "REJECTED");
+        members.flush();
+        var result = service.getMembers(approved.getId(), g.getId());
+        assertEquals(java.util.List.of(owner.getId(), approved.getId()),
+                result.stream().map(com.ridesync.server.dto.GroupMemberResponse::getUserId).toList());
+        assertEquals("OWNER", result.get(0).getRole());
+        assertEquals(approved.getNickname(), result.get(1).getNickname());
+        assertTrue(result.stream().noneMatch(com.ridesync.server.dto.GroupMemberResponse::isOnline));
+        assertEquals(2, service.getMembers(owner.getId(), g.getId()).size());
+        for (User denied : java.util.List.of(pending, rejected, outsider)) {
+            var error = assertThrows(com.ridesync.server.exception.ApiException.class,
+                    () -> service.getMembers(denied.getId(), g.getId()));
+            assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, error.getStatus());
+        }
+    }
+
+    @Test
     void pendingRequestsAreOwnerScopedAndDecisionsRemoveThem() {
         User owner = user();
         User applicant = user();
