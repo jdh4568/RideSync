@@ -8,6 +8,31 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class OnlineUserRegistryTests {
+    @Test
+    void textReachesAllValidUserConnectionsDespiteOneFailure() throws Exception {
+        var registry = new OnlineUserRegistry();
+        var a = session("a");
+        var b = session("b");
+        var broken = session("broken");
+        var expired = session("expired");
+        var other = session("other");
+        for (var s : new WebSocketSession[]{a, b, broken}) {
+            registry.register(1L, s, Instant.now().plusSeconds(300));
+        }
+        registry.register(1L, expired, Instant.now().minusSeconds(1));
+        registry.register(2L, other, Instant.now().plusSeconds(300));
+        doThrow(new java.io.IOException()).when(broken).sendMessage(any());
+        registry.sendToUser(1L, "hello");
+        verify(a).sendMessage(eq(new TextMessage("hello")));
+        verify(b).sendMessage(eq(new TextMessage("hello")));
+        verify(broken).close(CloseStatus.SERVER_ERROR);
+        verify(expired, never()).sendMessage(any());
+        verify(other, never()).sendMessage(any());
+        registry.sendToUser(1L, "again");
+        verify(broken, times(1)).sendMessage(any());
+        assertTrue(registry.isOnline(1L));
+    }
+
     private WebSocketSession session(String id) {
         WebSocketSession s = mock(WebSocketSession.class);
         when(s.getId()).thenReturn(id);

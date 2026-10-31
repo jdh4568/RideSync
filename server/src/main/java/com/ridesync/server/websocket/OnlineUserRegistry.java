@@ -44,6 +44,25 @@ public class OnlineUserRegistry {
         connections.computeIfPresent(session.getId(), (id, c) -> c.session == session ? null : c);
     }
 
+    public void sendToUser(Long userId, String payload) {
+        for (Connection c : connections.values()) {
+            if (!c.userId.equals(userId)) continue;
+            try {
+                synchronized (c.session) {
+                    if (connections.get(c.session.getId()) != c) continue;
+                    if (!c.valid(Instant.now())) {
+                        disconnect(c.session, CloseStatus.POLICY_VIOLATION);
+                        continue;
+                    }
+                    c.session.sendMessage(new TextMessage(payload));
+                }
+            } catch (Exception exception) {
+                // 일부 기기의 실패가 같은 사용자 또는 다른 사용자의 알림을 막지 않는다.
+                disconnect(c.session, CloseStatus.SERVER_ERROR);
+            }
+        }
+    }
+
     public void pong(WebSocketSession session) {
         Connection c = connections.get(session.getId());
         if (c != null && c.session == session) c.lastPong = Instant.now();
