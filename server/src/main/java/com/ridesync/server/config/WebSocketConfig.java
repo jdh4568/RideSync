@@ -9,6 +9,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 @Configuration
 @EnableWebSocket
+@org.springframework.scheduling.annotation.EnableScheduling
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketConfigurer {
     private final LoginWebSocketHandler loginHandler;

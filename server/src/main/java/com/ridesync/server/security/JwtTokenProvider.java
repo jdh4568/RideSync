@@ -54,4 +54,12 @@ public class JwtTokenProvider {
             throw new JwtException("유효하지 않은 사용자 ID입니다.", exception);
         }
     }
+
+    public Instant getExpiration(String token) {
+        Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+        if (claims.getExpiration() == null) {
+            throw new JwtException("토큰 만료 시각이 없습니다.");
+        }
+        return claims.getExpiration().toInstant();
+    }
 }

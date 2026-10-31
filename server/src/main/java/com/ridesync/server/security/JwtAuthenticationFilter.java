@@ -29,11 +29,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         Long userId;
+        java.time.Instant expiresAt = null;
         try {
             if (!header.regionMatches(true, 0, "Bearer ", 0, 7)) {
                 throw new JwtException("Bearer 토큰이 필요합니다.");
             }
             userId = tokenProvider.getUserId(header.substring(7).trim());
+            if (request.getServletPath().equals("/ws/login")) {
+                expiresAt = tokenProvider.getExpiration(header.substring(7).trim());
+            }
         } catch (JwtException | IllegalArgumentException exception) {
             reject(response);
             return;
@@ -44,6 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         var authentication = new UsernamePasswordAuthenticationToken(userId, null, List.of());
+        authentication.setDetails(expiresAt);
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);

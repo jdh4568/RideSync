@@ -33,6 +33,7 @@ class LoginWebSocketLiveTests {
     @Value("${local.server.port}") int port;
     @Autowired UserRepository users;
     @Autowired PasswordEncoder encoder;
+    @Autowired com.ridesync.server.websocket.OnlineUserRegistry onlineUsers;
     @MockitoSpyBean LoginWebSocketHandler handler;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
@@ -61,6 +62,7 @@ class LoginWebSocketLiveTests {
         user.setCreatedAt(Instant.now());
         users.saveAndFlush(user);
         WebSocket socket = null;
+        WebSocket secondSocket = null;
         try {
             var json = JsonMapper.builder().build();
             var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/auth/login"))
@@ -78,6 +80,9 @@ class LoginWebSocketLiveTests {
             while (!captured.getValue().getAttributes().containsKey(LoginWebSocketHandler.USER_ID_ATTRIBUTE)
                     && System.nanoTime() < deadline) Thread.sleep(10);
             assertEquals(user.getId(), captured.getValue().getAttributes().get(LoginWebSocketHandler.USER_ID_ATTRIBUTE));
+            awaitOnline(user.getId(), true);
+            secondSocket = connect(token, "").get(10, TimeUnit.SECONDS);
+            verify(handler, timeout(3000).times(2)).afterConnectionEstablished(any());
             denied(null, "");
             denied(null, "?token=" + token);
             denied("invalid", "");
@@ -90,12 +95,32 @@ class LoginWebSocketLiveTests {
                     .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_KEY))).compact();
             denied(expired, "");
             socket.sendClose(WebSocket.NORMAL_CLOSURE, "done").get(5, TimeUnit.SECONDS);
+            verify(handler, timeout(3000)).afterConnectionClosed(any(), any());
+            assertTrue(onlineUsers.isOnline(user.getId()));
+            secondSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done").get(5, TimeUnit.SECONDS);
+            awaitOnline(user.getId(), false);
+            String shortLived = Jwts.builder().subject(user.getId().toString())
+                    .expiration(Date.from(Instant.now().plusSeconds(3)))
+                    .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_KEY))).compact();
+            secondSocket = connect(shortLived, "").get(10, TimeUnit.SECONDS);
+            awaitOnline(user.getId(), true);
+            awaitOnline(user.getId(), false);
+            long closeDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            while (!secondSocket.isInputClosed() && System.nanoTime() < closeDeadline) Thread.sleep(10);
+            assertTrue(secondSocket.isInputClosed());
             users.deleteById(user.getId());
             denied(token, "");
-            verify(handler, times(1)).afterConnectionEstablished(any());
+            verify(handler, times(3)).afterConnectionEstablished(any());
         } finally {
             if (socket != null) socket.abort();
+            if (secondSocket != null) secondSocket.abort();
             if (users.existsById(user.getId())) users.deleteById(user.getId());
         }
+    }
+
+    private void awaitOnline(Long id, boolean expected) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (onlineUsers.isOnline(id) != expected && System.nanoTime() < deadline) Thread.sleep(10);
+        assertEquals(expected, onlineUsers.isOnline(id));
     }
 }
