@@ -33,9 +33,80 @@ class LoginWebSocketLiveTests {
     @Value("${local.server.port}") int port;
     @Autowired UserRepository users;
     @Autowired PasswordEncoder encoder;
+    @Autowired com.ridesync.server.security.JwtTokenProvider tokenProvider;
     @Autowired com.ridesync.server.websocket.OnlineUserRegistry onlineUsers;
     @MockitoSpyBean LoginWebSocketHandler handler;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+
+    @Test
+    void realHeartbeatKeepsResponsiveSocketAndClosesSilentSocket() throws Exception {
+        User user = new User();
+        String name = "heartbeat_" + UUID.randomUUID().toString().replace("-", "");
+        user.setLoginId(name);
+        user.setNickname(name);
+        user.setPassword(encoder.encode(UUID.randomUUID().toString()));
+        user.setCreatedAt(Instant.now());
+        users.saveAndFlush(user);
+        WebSocket responsive = null;
+        java.net.Socket silent = null;
+        var pings = new java.util.concurrent.atomic.AtomicInteger();
+        var silentPings = new java.util.concurrent.atomic.AtomicInteger();
+
+        try {
+            String token = tokenProvider.createToken(user.getId());
+            URI uri = URI.create("ws://127.0.0.1:" + port + "/ws/login");
+            responsive = client.newWebSocketBuilder().header("Authorization", "Bearer " + token)
+                    .buildAsync(uri, new WebSocket.Listener() {
+                        @Override
+                        public CompletionStage<?> onPing(WebSocket ws, java.nio.ByteBuffer data) {
+                            pings.incrementAndGet();
+                            return WebSocket.Listener.super.onPing(ws, data);
+                        }
+                    }).get(10, TimeUnit.SECONDS);
+            // Java HttpClient는 Pong을 자동 전송하므로 무응답 검증에는 원시 소켓을 사용한다.
+            silent = new java.net.Socket();
+            silent.connect(new java.net.InetSocketAddress("127.0.0.1", port), 5000);
+            silent.setSoTimeout(105000);
+            String upgrade = "GET /ws/login HTTP/1.1\r\nHost: 127.0.0.1:" + port
+                    + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13"
+                    + "\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=="
+                    + "\r\nAuthorization: Bearer " + token + "\r\n\r\n";
+            silent.getOutputStream().write(upgrade.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            var input = new java.io.DataInputStream(silent.getInputStream());
+            StringBuilder headers = new StringBuilder();
+            while (!headers.toString().endsWith("\r\n\r\n")) {
+                headers.append((char) input.readUnsignedByte());
+                assertTrue(headers.length() < 16384);
+            }
+            assertTrue(headers.toString().startsWith("HTTP/1.1 101"));
+            long heartbeatDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(105);
+            int closeCode = -1;
+            while (System.nanoTime() < heartbeatDeadline) {
+                int opcode = input.readUnsignedByte() & 15;
+                int length = input.readUnsignedByte();
+                assertTrue(length < 126, "서버 제어 프레임은 마스킹 없는 125바이트 이하여야 합니다.");
+                byte[] payload = input.readNBytes(length);
+                assertEquals(length, payload.length);
+                if (opcode == 9) silentPings.incrementAndGet(); // Pong을 보내지 않는다.
+                if (opcode == 8) {
+                    assertTrue(payload.length >= 2);
+                    closeCode = ((payload[0] & 255) << 8) | (payload[1] & 255);
+                    break;
+                }
+            }
+            assertEquals(1008, closeCode);
+            assertTrue(pings.get() >= 2);
+            assertTrue(silentPings.get() >= 2);
+            assertFalse(responsive.isInputClosed());
+            assertTrue(onlineUsers.isOnline(user.getId()));
+            responsive.sendClose(WebSocket.NORMAL_CLOSURE, "done").get(5, TimeUnit.SECONDS);
+            awaitOnline(user.getId(), false);
+        } finally {
+            if (responsive != null) responsive.abort();
+            if (silent != null) silent.close();
+            users.deleteById(user.getId());
+        }
+    }
 
     private CompletableFuture<WebSocket> connect(String token, String query) {
         var builder = client.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(5));

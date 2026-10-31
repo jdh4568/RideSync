@@ -2,6 +2,10 @@
 
 검증일: 2026-10-30
 
+후속 진행(2026-10-31): 아래는 그룹 REST 7개 완료 당시 기록이다.
+이후 온라인 상태를 포함한 그룹원 조회도 구현했으며, 웹소켓 최종 검증은
+[WEBSOCKET_VERIFICATION.md](WEBSOCKET_VERIFICATION.md)를 참고한다.
+
 ## 완료 범위
 
 DATABASE.md와 API_SPEC.md 기준으로 다음 REST API 7개를 구현하고 검증했다.
