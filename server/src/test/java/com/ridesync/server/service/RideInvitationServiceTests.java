@@ -15,6 +15,116 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class RideInvitationServiceTests {
+    @Test
+    void responsesAreFinalIdempotentAndBroadcastFullStatus() {
+        String id = service.create(1L, request()).invitationId();
+        clearInvocations(online);
+        service.respond(2L, id, true);
+        service.respond(2L, id, true);
+        var payload = ArgumentCaptor.forClass(String.class);
+        verify(online, times(1)).sendToUser(eq(1L), payload.capture());
+        var status = json.readTree(payload.getValue());
+        assertEquals(2, status.get("acceptedCount").asInt());
+        assertTrue(status.get("canStart").asBoolean());
+        assertEquals("ACCEPTED", status.get("participants").get(1).get("status").asText());
+        assertEquals("INVITATION_RESPONSE_CONFLICT", assertThrows(ApiException.class,
+                () -> service.respond(2L, id, false)).getCode());
+        String rejectedId = service.create(1L, request()).invitationId();
+        service.respond(2L, rejectedId, false);
+        var rejected = service.findActive(rejectedId).orElseThrow().status();
+        assertEquals(1, rejected.acceptedCount());
+        assertFalse(rejected.canStart());
+        assertEquals("REJECTED", rejected.participants().get(1).status());
+    }
+
+    @Test
+    void forbidsLeaderAndOutsiderAndRejectsMissingOrExpiredInvitation() {
+        String id = service.create(1L, request()).invitationId();
+        for (Long user : List.of(1L, 99L)) {
+            assertEquals("FORBIDDEN", assertThrows(ApiException.class,
+                    () -> service.respond(user, id, true)).getCode());
+        }
+        assertEquals("INVITATION_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.respond(2L, "missing", true)).getCode());
+        when(clock.instant()).thenReturn(now.plusSeconds(1800));
+        assertEquals("INVITATION_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.respond(2L, id, true)).getCode());
+    }
+
+    @Test
+    void replayTargetsOnlyNewSessionAndSkipsAnsweredUnrelatedAndExpiredInvitations() {
+        var session = mock(org.springframework.web.socket.WebSocketSession.class);
+        String id = service.create(1L, request()).invitationId();
+        clearInvocations(online);
+        service.replay(2L, session);
+        var payload = ArgumentCaptor.forClass(String.class);
+        verify(online).sendToSession(eq(session), payload.capture());
+        assertEquals("RIDE_INVITE", json.readTree(payload.getValue()).get("type").asText());
+        service.respond(2L, id, true);
+        clearInvocations(online);
+        service.replay(2L, session);
+        service.replay(99L, session);
+        verifyNoInteractions(online);
+        service.replay(1L, session);
+        verify(online).sendToSession(eq(session), payload.capture());
+        assertEquals(2, json.readTree(payload.getValue()).get("acceptedCount").asInt());
+        clearInvocations(online);
+        when(clock.instant()).thenReturn(now.plusSeconds(1800));
+        service.replay(1L, session);
+        service.replay(2L, session);
+        verifyNoInteractions(online);
+    }
+
+    @Test
+    void concurrentOppositeResponsesOnlyCommitOneDecision() throws Exception {
+        String id = service.create(1L, request()).invitationId();
+        clearInvocations(online);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var results = new ArrayList<java.util.concurrent.Future<String>>();
+            for (boolean accepted : new boolean[]{true, false}) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    try { service.respond(2L, id, accepted); return "OK"; }
+                    catch (ApiException e) { return e.getCode(); }
+                }));
+            }
+            start.countDown();
+            List<String> outcomes = new ArrayList<>();
+            for (var future : results) outcomes.add(future.get(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(1, Collections.frequency(outcomes, "OK"));
+            assertEquals(1, Collections.frequency(outcomes, "INVITATION_RESPONSE_CONFLICT"));
+            verify(online, times(1)).sendToUser(eq(1L), anyString());
+        } finally { pool.shutdownNow(); }
+    }
+
+    @Test
+    void concurrentDifferentParticipantsAndReplayNeverRegressStatus() throws Exception {
+        var member = new GroupMember();
+        var user = new User(); user.setId(3L); user.setNickname("추가"); member.setUser(user);
+        var approved = new ArrayList<>(members.findApprovedMembers(10L)); approved.add(member);
+        when(members.findApprovedMembers(10L)).thenReturn(approved);
+        String id = service.create(1L, new CreateRideInvitationRequest(10L, List.of(2L, 3L))).invitationId();
+        List<Integer> delivered = Collections.synchronizedList(new ArrayList<>());
+        doAnswer(call -> { delivered.add(json.readTree((String) call.getArgument(1)).get("acceptedCount").asInt()); return null; })
+                .when(online).sendToUser(eq(1L), anyString());
+        doAnswer(call -> { delivered.add(json.readTree((String) call.getArgument(1)).get("acceptedCount").asInt()); return null; })
+                .when(online).sendToSession(any(), anyString());
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(3);
+        try {
+            var first = pool.submit(() -> { start.await(); service.respond(2L, id, true); return null; });
+            var second = pool.submit(() -> { start.await(); service.respond(3L, id, true); return null; });
+            var replay = pool.submit(() -> { start.await(); service.replay(1L, mock(org.springframework.web.socket.WebSocketSession.class)); return null; });
+            start.countDown();
+            for (var future : List.of(first, second, replay)) future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(3, service.findActive(id).orElseThrow().status().acceptedCount());
+            assertEquals(delivered.stream().sorted().toList(), delivered);
+            assertEquals(3, delivered.size());
+        } finally { pool.shutdownNow(); }
+    }
+
     final RidingGroupRepository groups = mock(RidingGroupRepository.class);
     final GroupMemberRepository members = mock(GroupMemberRepository.class);
     final OnlineUserRegistry online = mock(OnlineUserRegistry.class);

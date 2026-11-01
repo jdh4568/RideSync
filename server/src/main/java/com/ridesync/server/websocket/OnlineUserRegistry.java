@@ -5,6 +5,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -47,19 +48,35 @@ public class OnlineUserRegistry {
     public void sendToUser(Long userId, String payload) {
         for (Connection c : connections.values()) {
             if (!c.userId.equals(userId)) continue;
-            try {
-                synchronized (c.session) {
-                    if (connections.get(c.session.getId()) != c) continue;
-                    if (!c.valid(Instant.now())) {
-                        disconnect(c.session, CloseStatus.POLICY_VIOLATION);
-                        continue;
-                    }
-                    c.session.sendMessage(new TextMessage(payload));
+            sendToSession(c.session, payload);
+        }
+    }
+
+    public Optional<Long> authenticatedUser(WebSocketSession session) {
+        Connection c = connections.get(session.getId());
+        if (c == null || c.session != session) return Optional.empty();
+        if (!c.valid(Instant.now())) {
+            disconnect(session, CloseStatus.POLICY_VIOLATION);
+            return Optional.empty();
+        }
+        return Optional.of(c.userId);
+    }
+
+    public void sendToSession(WebSocketSession session, String payload) {
+        Connection c = connections.get(session.getId());
+        if (c == null || c.session != session) return;
+        try {
+            synchronized (c.session) {
+                if (connections.get(c.session.getId()) != c) return;
+                if (!c.valid(Instant.now())) {
+                    disconnect(c.session, CloseStatus.POLICY_VIOLATION);
+                    return;
                 }
-            } catch (Exception exception) {
-                // 일부 기기의 실패가 같은 사용자 또는 다른 사용자의 알림을 막지 않는다.
-                disconnect(c.session, CloseStatus.SERVER_ERROR);
+                c.session.sendMessage(new TextMessage(payload));
             }
+        } catch (Exception exception) {
+            // 일부 기기의 실패가 같은 사용자 또는 다른 사용자의 알림을 막지 않는다.
+            disconnect(c.session, CloseStatus.SERVER_ERROR);
         }
     }
 

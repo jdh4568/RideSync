@@ -1,8 +1,8 @@
-# 라이딩 초대 1단계 구현 및 검증
+# 라이딩 초대 1·2단계 구현 및 검증
 
 작업일: 2026-11-01
 
-## 구현 범위
+## 1단계 구현 범위
 
 - `POST /api/v1/ride-invitations`: JWT 사용자 기준 그룹장 및 APPROVED 자격 검사, HTTP 201 응답.
 - 필수값·양수 ID·1~49명·중복 ID·본인 포함·미승인 대상 검증.
@@ -37,7 +37,7 @@ Java 경로는 `src/main/java/com/ridesync/server/`, 테스트 경로는 `src/te
 
 신규 초대 테스트의 Repository와 전송 계층은 mock을 사용한다. 실제 초대 생성 HTTP부터 WebSocket 수신까지 연결한 통합 검증은 3단계에서 수행한다. 만료 테스트는 Clock을 제어하며 실제 30분 대기를 검증한 것은 아니다.
 
-## 실행 결과 및 재실행
+## 1단계 실행 결과 및 재실행
 
 최종 실행 결과: `RIDEMATE_LIVE_TEST=true` 상태에서 `gradlew.bat --offline test build` 성공(2분 12초). JUnit XML 합계 71개, 실패·오류·건너뜀 0개. 기존 63개와 신규 8개를 포함하며 기존 실제 MySQL·HTTP·WebSocket 회귀 테스트도 실행했다. 신규 초대의 실제 네트워크 통합 검증까지 완료했다는 의미는 아니다.
 
@@ -59,9 +59,27 @@ try {
 }
 ```
 
+## 2단계 구현 및 검증
+
+- `LoginWebSocketHandler`: 엄격한 JSON 필드 검증, 인증된 연결 사용자로 응답 처리, 요청 연결에만 ERROR 전송, 연결 등록 후 복구 호출.
+- `RideInvitationService`: PENDING에서 한 번만 응답 확정, 동일 응답은 무시하고 반대 응답은 충돌 오류, 선두에게 전체 현황 갱신. 초대별 잠금으로 최초 알림·응답·재접속 복구·정리를 직렬화한다.
+- `OnlineUserRegistry`: 특정 연결에만 메시지를 보내는 메서드와 연결 유효성 기반 사용자 조회 추가. 기존 사용자별 방송·Ping과 같은 세션 잠금을 사용한다.
+- `WebSocketErrorMessage`: 명세의 type/code/message 오류 DTO.
+- 재접속한 선두는 유효한 초대의 최신 현황을 받고, 대상은 PENDING 초대만 받는다. 기존 연결에는 복구 메시지를 보내지 않으며, 만료·응답 완료·타인 초대는 대상 복구에서 제외한다.
+- 응답·재접속으로 생성 시각을 갱신하지 않는다. 연결 종료는 초대 상태를 바꾸지 않는다.
+
+추가 테스트:
+
+| 테스트 | 확인 내용 |
+|---|---|
+| RideInvitationServiceTests 추가 5개 | 수락·거절·멱등성·반대 응답 충돌, 비초대자/선두/만료 차단, 복구 대상과 최신 현황, 같은 사용자의 상반된 동시 응답, 다른 참여자의 동시 응답과 복구 순서 |
+| LoginWebSocketHandlerTests 신규 3개 | 등록 후 복구 호출, 사용자 ID 위조 무시, JSON 형식/boolean/후행 JSON 검증, 오류 수신 연결 격리와 연결 유지, 만료·제거된 연결 응답 차단 |
+
+서비스 테스트는 Repository와 전송 객체를 mock으로 대체한다. Handler 테스트는 실제 OnlineUserRegistry와 JsonMapper를 사용하되 Service 및 WebSocketSession은 mock이다. 실제 초대 HTTP→WebSocket→응답→재접속 전체 흐름은 3단계 검증 대상이다.
+
+2단계 최종 결과: `RIDEMATE_LIVE_TEST=true`로 `gradlew.bat --offline test build` 성공(2분 15초). JUnit XML 합계 **79개 통과, 실패·오류·건너뜀 0개**. 기존 71개와 신규 8개를 포함하며 기존 실제 MySQL·HTTP·WebSocket 회귀 테스트도 통과했다. 관련 테스트 선행 실행과 `git diff --check`도 통과했다. DB 스키마·Entity 및 `ddl-auto=validate`는 변경하지 않았다.
+
 ## 후속 구현
 
-- 2단계: 수락·거절, 참여 현황 갱신, ERROR 응답, 재접속 복구.
-- 현재 LoginWebSocketHandler의 클라이언트 텍스트 수신은 기존처럼 1003으로 종료된다.
 - 3단계: 신규 초대 흐름의 실제 REST·WebSocket 통합 검증.
 - 라이딩 시작, `/ws/ride`, 종료·기록·통계는 별도 후속 작업이다.
