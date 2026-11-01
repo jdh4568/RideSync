@@ -638,6 +638,8 @@ Response
 - `groupName`은 주행 화면의 그룹 이름에 사용한다.
 - `participantCount`는 RIDE_SESSION_MEMBER에 등록된 인원 수이다.
 - 조회는 해당 라이딩 세션의 참여자만 가능하다.
+- 성공 시 HTTP 200과 `groupName`, `participantCount`만 반환한다. 현재 그룹 가입 상태·온라인 여부가 아닌 RIDE_SESSION_MEMBER의 참여 기록을 기준으로 조회 권한을 검사한다.
+- 미인증 요청은 401(`UNAUTHORIZED`), 없는 세션은 404(`RIDE_SESSION_NOT_FOUND`), 세션에 참여하지 않은 사용자는 그룹장·그룹원이어도 403(`FORBIDDEN`)을 반환한다.
 - 속도와 이동 거리는 Android에서 GPS를 기반으로 계산한다.
 
 ### 10.2 실시간 수신호 전송
