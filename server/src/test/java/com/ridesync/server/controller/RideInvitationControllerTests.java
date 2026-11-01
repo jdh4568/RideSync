@@ -30,6 +30,27 @@ class RideInvitationControllerTests {
     }
 
     @Test
+    void startsWithJwtPrincipalAndNoRequestBody() throws Exception {
+        when(invitations.start(1L, "inv-test")).thenReturn(new com.ridesync.server.dto.StartRideResponse(
+                50L, 10L, "RIDING", java.time.LocalDateTime.of(2026, 11, 2, 9, 0)));
+        mvc.perform(post("/api/v1/ride-invitations/inv-test/start").header("Authorization", token()))
+                .andExpect(status().isOk())
+                .andExpect(content().json("{\"rideSessionId\":50,\"groupId\":10,\"status\":\"RIDING\",\"startedAt\":\"2026-11-02T09:00:00\"}"));
+        verify(invitations).start(1L, "inv-test");
+    }
+
+    @Test
+    void startRequiresAuthenticationAndUsesCommonErrors() throws Exception {
+        mvc.perform(post("/api/v1/ride-invitations/inv-test/start"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(invitations);
+        when(invitations.start(1L, "inv-test")).thenThrow(new com.ridesync.server.exception.ApiException(
+                org.springframework.http.HttpStatus.CONFLICT, "INSUFFICIENT_PARTICIPANTS", "인원 부족"));
+        mvc.perform(post("/api/v1/ride-invitations/inv-test/start").header("Authorization", token()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("INSUFFICIENT_PARTICIPANTS"));
+    }
+
+    @Test
     void requiresAuthentication() throws Exception {
         mvc.perform(post("/api/v1/ride-invitations").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"groupId\":10,\"inviteeIds\":[2]}"))

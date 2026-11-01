@@ -2,6 +2,10 @@ package com.ridesync.server.service;
 
 import com.ridesync.server.dto.*;
 import com.ridesync.server.entity.User;
+import com.ridesync.server.entity.RideSession;
+import com.ridesync.server.entity.RideSessionMember;
+import com.ridesync.server.repository.RideSessionRepository;
+import com.ridesync.server.repository.RideSessionMemberRepository;
 import com.ridesync.server.exception.ApiException;
 import com.ridesync.server.repository.GroupMemberRepository;
 import com.ridesync.server.repository.RidingGroupRepository;
@@ -11,11 +15,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,21 +35,33 @@ public class RideInvitationService {
     private final OnlineUserRegistry onlineUsers;
     private final JsonMapper json;
     private final Clock clock;
+    private final RideSessionRepository rides;
+    private final RideSessionMemberRepository rideMembers;
+    private final TransactionTemplate startTransaction;
     private final Map<String, Invitation> invitations = new ConcurrentHashMap<>();
 
     @Autowired
     public RideInvitationService(RidingGroupRepository groups, GroupMemberRepository members,
-                                 OnlineUserRegistry onlineUsers, JsonMapper json) {
-        this(groups, members, onlineUsers, json, Clock.systemUTC());
+                                 OnlineUserRegistry onlineUsers, JsonMapper json,
+                                 RideSessionRepository rides, RideSessionMemberRepository rideMembers,
+                                 PlatformTransactionManager transactionManager) {
+        this(groups, members, onlineUsers, json, Clock.systemUTC(), rides, rideMembers, transactionManager);
     }
 
     RideInvitationService(RidingGroupRepository groups, GroupMemberRepository members,
-                          OnlineUserRegistry onlineUsers, JsonMapper json, Clock clock) {
+                          OnlineUserRegistry onlineUsers, JsonMapper json, Clock clock,
+                          RideSessionRepository rides, RideSessionMemberRepository rideMembers,
+                          PlatformTransactionManager transactionManager) {
         this.groups = groups;
         this.members = members;
         this.onlineUsers = onlineUsers;
         this.json = json;
         this.clock = clock;
+        this.rides = rides;
+        this.rideMembers = rideMembers;
+        this.startTransaction = new TransactionTemplate(transactionManager);
+        // 외부 트랜잭션이 있어도 execute 반환 전에 실제 커밋을 완료한다.
+        this.startTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     // Entity를 메모리에 보관하지 않는다. 생성 시점의 이름과 참여 상태만 저장한다.
@@ -110,6 +131,62 @@ public class RideInvitationService {
             onlineUsers.sendToUser(userId, statusJson);
         }
         return new CreateRideInvitationResponse(id, group.getId(), "PENDING", ids.size());
+    }
+
+    private record StartedRide(StartRideResponse response, String payload) {}
+
+    public StartRideResponse start(Long userId, String id) {
+        Invitation invitation = invitations.get(id);
+        if (invitation == null) throw notFound();
+        synchronized (invitation) {
+            if (!isActive(id, invitation)) throw notFound();
+            if (!invitation.invite.leaderId().equals(userId)) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "초대 생성자만 라이딩을 시작할 수 있습니다.");
+            }
+            var acceptedIds = invitation.status.participants().stream()
+                    .filter(p -> p.status().equals("ACCEPTED")).map(RideInviteStatusMessage.Participant::userId).toList();
+            // 응답/복구/만료 정리와 같은 잠금을 커밋 및 알림까지 유지한다.
+            StartedRide started = Objects.requireNonNull(startTransaction.execute(transaction -> {
+                var group = groups.findByIdForUpdate(invitation.invite.groupId()).orElseThrow(() ->
+                        new ApiException(HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND", "존재하지 않는 그룹입니다."));
+                if (!group.getOwner().getId().equals(userId)
+                        || !members.existsByGroup_IdAndUser_IdAndStatus(group.getId(), userId, "APPROVED")) {
+                    throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "승인된 그룹장만 라이딩을 시작할 수 있습니다.");
+                }
+                if (acceptedIds.size() < 2) {
+                    throw new ApiException(HttpStatus.CONFLICT, "INSUFFICIENT_PARTICIPANTS", "선두 포함 2명 이상 수락해야 합니다.");
+                }
+                Map<Long, User> approved = new HashMap<>();
+                members.findApprovedMembers(group.getId()).forEach(m -> approved.put(m.getUser().getId(), m.getUser()));
+                if (!approved.keySet().containsAll(acceptedIds)) {
+                    throw new ApiException(HttpStatus.CONFLICT, "INVALID_PARTICIPANT", "참여자는 승인된 그룹원이어야 합니다.");
+                }
+                Instant now = clock.instant();
+                var ride = new RideSession();
+                ride.setGroup(group);
+                ride.setLeader(approved.get(userId));
+                ride.setStatus("RIDING");
+                ride.setStartedAt(now);
+                ride.setCreatedAt(now);
+                rides.save(ride);
+                for (Long participantId : acceptedIds) {
+                    var member = new RideSessionMember();
+                    member.setRideSession(ride);
+                    member.setUser(approved.get(participantId));
+                    member.setRole(participantId.equals(userId) ? "LEADER" : "MEMBER");
+                    member.setJoinedAt(now);
+                    rideMembers.save(member);
+                }
+                // 직렬화도 커밋 전에 끝내 실패 시 DB 저장을 롤백한다.
+                String payload = json.writeValueAsString(new RideStartedMessage("RIDE_STARTED", ride.getId(), group.getId()));
+                return new StartedRide(new StartRideResponse(ride.getId(), group.getId(), "RIDING",
+                        LocalDateTime.ofInstant(now, ZoneId.of("Asia/Seoul"))), payload);
+            }));
+            // 저장/커밋 예외는 여기까지 도달하지 않으므로 유효한 초대가 그대로 남는다.
+            invitations.remove(id, invitation);
+            for (Long participantId : acceptedIds) onlineUsers.sendToUser(participantId, started.payload());
+            return started.response();
+        }
     }
 
     public void respond(Long userId, String id, boolean accepted) {

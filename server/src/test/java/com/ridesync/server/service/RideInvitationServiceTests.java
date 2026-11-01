@@ -130,7 +130,9 @@ class RideInvitationServiceTests {
     final OnlineUserRegistry online = mock(OnlineUserRegistry.class);
     final Clock clock = mock(Clock.class);
     final JsonMapper json = JsonMapper.builder().build();
-    final RideInvitationService service = new RideInvitationService(groups, members, online, json, clock);
+    final RideInvitationService service = new RideInvitationService(groups, members, online, json, clock,
+            mock(RideSessionRepository.class), mock(RideSessionMemberRepository.class),
+            mock(org.springframework.transaction.PlatformTransactionManager.class));
     final Instant now = Instant.parse("2026-11-01T00:00:00Z");
     RidingGroup group;
 

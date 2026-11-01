@@ -1,4 +1,4 @@
-# 라이딩 초대 1·2단계 구현 및 검증
+# 라이딩 초대 1~3단계 구현 및 검증
 
 작업일: 2026-11-01
 
@@ -35,7 +35,7 @@ Java 경로는 `src/main/java/com/ridesync/server/`, 테스트 경로는 `src/te
 | RideInvitationServiceTests | 그룹장 권한, 승인 대상, 온라인 조건, 중복·본인 차단, 고유 ID, 초기 메시지 JSON, DB save 미호출, 30분 만료 경계·정리 |
 | OnlineUserRegistryTests | 모든 유효 연결에 전송, 타 사용자·만료 연결 제외, 일부 전송 실패 후 계속 전송 및 연결 정리, 기존 Ping/Pong 회귀 |
 
-신규 초대 테스트의 Repository와 전송 계층은 mock을 사용한다. 실제 초대 생성 HTTP부터 WebSocket 수신까지 연결한 통합 검증은 3단계에서 수행한다. 만료 테스트는 Clock을 제어하며 실제 30분 대기를 검증한 것은 아니다.
+1단계 초대 테스트의 Repository와 전송 계층은 mock을 사용한다. 실제 초대 생성 HTTP부터 WebSocket 수신까지 연결한 통합 검증 결과는 아래 3단계를 참고한다. 만료 테스트는 Clock을 제어하며 실제 30분 대기를 검증한 것은 아니다.
 
 ## 1단계 실행 결과 및 재실행
 
@@ -75,11 +75,38 @@ try {
 | RideInvitationServiceTests 추가 5개 | 수락·거절·멱등성·반대 응답 충돌, 비초대자/선두/만료 차단, 복구 대상과 최신 현황, 같은 사용자의 상반된 동시 응답, 다른 참여자의 동시 응답과 복구 순서 |
 | LoginWebSocketHandlerTests 신규 3개 | 등록 후 복구 호출, 사용자 ID 위조 무시, JSON 형식/boolean/후행 JSON 검증, 오류 수신 연결 격리와 연결 유지, 만료·제거된 연결 응답 차단 |
 
-서비스 테스트는 Repository와 전송 객체를 mock으로 대체한다. Handler 테스트는 실제 OnlineUserRegistry와 JsonMapper를 사용하되 Service 및 WebSocketSession은 mock이다. 실제 초대 HTTP→WebSocket→응답→재접속 전체 흐름은 3단계 검증 대상이다.
+2단계 서비스 테스트는 Repository와 전송 객체를 mock으로 대체한다. Handler 테스트는 실제 OnlineUserRegistry와 JsonMapper를 사용하되 Service 및 WebSocketSession은 mock이다. 실제 초대 HTTP→WebSocket→응답→재접속 전체 흐름의 검증 결과는 아래 3단계를 참고한다.
 
 2단계 최종 결과: `RIDEMATE_LIVE_TEST=true`로 `gradlew.bat --offline test build` 성공(2분 15초). JUnit XML 합계 **79개 통과, 실패·오류·건너뜀 0개**. 기존 71개와 신규 8개를 포함하며 기존 실제 MySQL·HTTP·WebSocket 회귀 테스트도 통과했다. 관련 테스트 선행 실행과 `git diff --check`도 통과했다. DB 스키마·Entity 및 `ddl-auto=validate`는 변경하지 않았다.
 
+## 3단계 실제 통합 검증
+
+추가 파일: `src/test/java/com/ridesync/server/RideInvitationLiveIntegrationTests.java`.
+
+로컬 MySQL 및 127.0.0.1 임시 포트의 실제 Spring Boot 서버를 사용한다. 서버의 Service, Repository, Handler, 연결 레지스트리를 mock/spy로 대체하지 않는다. 계정은 실제 회원가입·로그인 API로 만들고, 그룹 생성·가입 신청·승인도 HTTP로 수행한다. WebSocket 텍스트는 실제 클라이언트 수신 큐에서 확인한다.
+
+| 테스트 | 실제 검증 내용 |
+|---|---|
+| fullInvitationLifecycleWithMultipleConnectionsErrorsAndReconnect | 선두·대상 다중 연결의 초대/최초 현황, 비초대자와 선두의 응답 차단, 사용자 ID 위조 무시, 잘못된 JSON/boolean 오류 후 연결 유지, 수락·거절·동일 재전송·반대 응답 충돌, PENDING 대상 재접속 초대, 선두 재접속 최신 현황, 응답 완료 대상의 팝업 재전송 제외, 없는 초대 오류 |
+| creationRejectsInvalidPermissionsTargetsAndOfflineUsersWithoutMessages | 미인증·일반 멤버 생성 차단, 빈 목록·중복·본인 포함 차단, 미승인 대상 차단, 대상/선두 오프라인 차단, 실패 후 알림이 전송되지 않음 |
+| concurrentRepliesFromTwoDevicesCommitOnceAndBroadcastInOrder | 같은 사용자의 두 실제 연결에서 수락/거절 동시 전송, 한 상태만 확정, 패배한 응답에만 충돌 오류, 선두에게 중복 없는 현황, 새 선두 연결에 동일한 최신 현황 복구 및 기존 연결에 복구 메시지 미전송 |
+
+각 시나리오에서 해당 그룹의 RIDE_SESSION 및 RIDE_SESSION_MEMBER가 생성되지 않았는지 SQL로 확인한다. 전체 흐름에서는 승인된 그룹원 수가 유지되는지도 확인한다. 종료 시 테스트가 생성한 그룹·가입 관계·계정만 삭제하고 잔여 그룹/계정이 없는지 확인한다. 소켓은 종료하며, 테스트 클래스 종료 시 Spring 컨텍스트도 닫아 임시 초대 메모리를 해제한다.
+
+신규 통합 테스트만 실행한 결과: 3개 통과, 빌드 성공(50초). 제품 코드 수정 없이 검증했다.
+
+최종 전체 실행: 2026-11-01, `RIDEMATE_LIVE_TEST=true`로 `gradlew.bat --offline test build` 성공(2분 19초). JUnit XML 합계 **82개 통과, 실패·오류·건너뜀 0개**. 신규 실제 초대 통합 테스트 3개와 기존 79개를 포함한다. 전체 실행의 신규 통합 테스트 3개 소요 시간은 약 8.5초다. 기존 인증·그룹·JWT 만료·실제 Ping/Pong 테스트도 실행했다. 기존 main 산출물은 변경이 없어 Gradle이 재사용했으며 전체 test 작업은 실제 재실행했다. `git diff --check`도 통과했다.
+
+이번 단계 변경 파일은 통합 테스트 1개와 API_SPEC.md, 본 검증 문서다. 제품 코드·DB 스키마·Entity·`ddl-auto=validate`는 변경하지 않았다.
+
+### 검증 한계
+
+- 실제 검증은 로컬 PC의 MySQL·루프백 HTTP/WebSocket 환경이다. Android 단말, 화면 전환, 이동통신 단절, 외부 프록시 및 다중 서버 환경은 검증하지 않았다.
+- 추가 메시지가 없는지는 기대 메시지 처리 후 250ms의 수신 큐 관측으로 검사한다. 무기한 미전송 보장은 아니다.
+- 초대 30분 만료는 기존 Clock 기반 단위 테스트로 검증했다. 실제 30분 대기나 서버 재시작 후 클라이언트 화면 정리는 이번 통합 테스트에 포함하지 않는다.
+- 전송 실패 주입은 기존 연결 레지스트리 단위 테스트의 범위이며, 이번 통합 테스트에서는 실제 정상 종료·재접속을 검증한다.
+- 테스트는 강제 종료되면 데이터 정리가 완료되지 않을 수 있다. 전체 테이블 삭제나 스키마 변경은 수행하지 않는다.
+
 ## 후속 구현
 
-- 3단계: 신규 초대 흐름의 실제 REST·WebSocket 통합 검증.
 - 라이딩 시작, `/ws/ride`, 종료·기록·통계는 별도 후속 작업이다.

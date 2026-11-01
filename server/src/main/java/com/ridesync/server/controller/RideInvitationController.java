@@ -2,6 +2,7 @@ package com.ridesync.server.controller;
 
 import com.ridesync.server.dto.CreateRideInvitationRequest;
 import com.ridesync.server.dto.CreateRideInvitationResponse;
+import com.ridesync.server.dto.StartRideResponse;
 import com.ridesync.server.service.RideInvitationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,11 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class RideInvitationController {
     private final RideInvitationService invitations;
+
+    @PostMapping("/{invitationId}/start")
+    public StartRideResponse start(@AuthenticationPrincipal Long userId, @PathVariable String invitationId) {
+        return invitations.start(userId, invitationId);
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
