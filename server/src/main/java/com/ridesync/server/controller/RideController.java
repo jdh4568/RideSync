@@ -1,6 +1,9 @@
 package com.ridesync.server.controller;
 
 import com.ridesync.server.dto.RideResponse;
+import com.ridesync.server.dto.RideRecordResponse;
+import com.ridesync.server.dto.SaveRideRecordRequest;
+import jakarta.validation.Valid;
 import com.ridesync.server.service.RideService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -12,6 +15,13 @@ import org.springframework.web.bind.annotation.*;
 public class RideController {
     private final RideService rides;
     private final com.ridesync.server.service.RideFinishService finishService;
+
+    @PutMapping("/{rideSessionId}/record")
+    public RideRecordResponse saveRecord(@AuthenticationPrincipal Long userId,
+            @PathVariable Long rideSessionId,
+            @Valid @RequestBody SaveRideRecordRequest request) {
+        return rides.saveRecord(userId, rideSessionId, request);
+    }
 
     @PostMapping("/{rideSessionId}/finish")
     public com.ridesync.server.dto.FinishRideResponse finish(@AuthenticationPrincipal Long userId,

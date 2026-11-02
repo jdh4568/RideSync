@@ -268,6 +268,49 @@ class RideWebSocketLiveTests {
             }
         } finally { gate.countDown(); pool.shutdownNow(); }
     }
+    JsonNode putRecord(long ride, Account user, String body, int expected) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/v1/rides/"+ride+"/record"))
+                .timeout(Duration.ofSeconds(10)).header("Content-Type","application/json");
+        if(user!=null) request.header("Authorization","Bearer "+user.token());
+        var result=client.send(request.PUT(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());
+        assertEquals(expected,result.statusCode(),result.body()); return json.readTree(result.body());
+    }
+    @Test void recordLifecyclePersistsOnlyOwnRowAndUpdatesOnRetry() throws Exception {
+        var r=riding(); var outsider=account();
+        String body="{\"distance\":15.25,\"averageSpeed\":22.5}";
+        putRecord(r.id(),null,body,401);
+        assertEquals("RIDE_NOT_FINISHED",putRecord(r.id(),r.owner(),body,409).get("code").asText());
+        assertEquals("FORBIDDEN",putRecord(r.id(),outsider,body,403).get("code").asText());
+        assertEquals("RIDE_SESSION_NOT_FOUND",putRecord(Long.MAX_VALUE,r.owner(),body,404).get("code").asText());
+        var leader=ridePeer(r.owner(),r.id()); var member=ridePeer(r.member(),r.id()); leader.quiet(); member.quiet();
+        leader.send(Map.of("type","RIDE_SIGNAL","signal","LEFT")); member.next("RIDE_SIGNAL");
+        call("/api/v1/rides/"+r.id()+"/finish",r.owner(),null,200); leader.next("RIDE_FINISHED"); member.next("RIDE_FINISHED");
+        var response=putRecord(r.id(),r.member(),body,200);
+        assertEquals(3,response.size()); assertEquals(r.id(),response.get("rideSessionId").asLong());
+        assertEquals(15.25,response.get("distance").asDouble()); assertEquals(22.5,response.get("averageSpeed").asDouble());
+        assertNull(jdbc.queryForObject("select distance from ride_session_member where ride_session_id=? and user_id=?",java.math.BigDecimal.class,r.id(),r.owner().id()));
+        putRecord(r.id(),r.owner(),"{\"distance\":0,\"averageSpeed\":0}",200);
+        assertEquals(response,putRecord(r.id(),r.member(),body,200));
+        putRecord(r.id(),r.member(),"{\"distance\":30.12,\"averageSpeed\":25.34}",200);
+        assertEquals(new java.math.BigDecimal("30.12"),jdbc.queryForObject("select distance from ride_session_member where ride_session_id=? and user_id=?",java.math.BigDecimal.class,r.id(),r.member().id()));
+        assertEquals(new java.math.BigDecimal("25.34"),jdbc.queryForObject("select average_speed from ride_session_member where ride_session_id=? and user_id=?",java.math.BigDecimal.class,r.id(),r.member().id()));
+        putRecord(r.id(),r.member(),"{\"distance\":1.001,\"averageSpeed\":3}",400);
+        assertEquals(new java.math.BigDecimal("30.12"),jdbc.queryForObject("select distance from ride_session_member where ride_session_id=? and user_id=?",java.math.BigDecimal.class,r.id(),r.member().id()));
+        assertEquals(2,jdbc.queryForObject("select count(*) from ride_session_member where ride_session_id=?",Integer.class,r.id()));
+    }
+    @Test void concurrentRecordRequestsKeepValuesPairedAndDoNotInsertRows() throws Exception {
+        var r=riding(); call("/api/v1/rides/"+r.id()+"/finish",r.owner(),null,200);
+        var gate=new CountDownLatch(1); var pool=Executors.newFixedThreadPool(2);
+        try {
+            var first=pool.submit(()->{gate.await();return putRecord(r.id(),r.member(),"{\"distance\":11.11,\"averageSpeed\":22.22}",200);});
+            var second=pool.submit(()->{gate.await();return putRecord(r.id(),r.member(),"{\"distance\":33.33,\"averageSpeed\":44.44}",200);});
+            gate.countDown(); first.get(15,TimeUnit.SECONDS); second.get(15,TimeUnit.SECONDS);
+            var pair=jdbc.queryForObject("select concat(distance, ':', average_speed) from ride_session_member where ride_session_id=? and user_id=?",String.class,r.id(),r.member().id());
+            assertTrue(Set.of("11.11:22.22","33.33:44.44").contains(pair),pair);
+            assertEquals(1,jdbc.queryForObject("select count(*) from ride_session_member where ride_session_id=? and user_id=?",Integer.class,r.id(),r.member().id()));
+            assertNull(jdbc.queryForObject("select distance from ride_session_member where ride_session_id=? and user_id=?",java.math.BigDecimal.class,r.id(),r.owner().id()));
+        } finally {pool.shutdownNow();}
+    }
     void assertNoRideRecords(long group) {
         assertEquals(0, jdbc.queryForObject("select count(*) from ride_session where group_id=?", Integer.class, group));
         assertEquals(0, jdbc.queryForObject("select count(*) from ride_session_member m join ride_session s on m.ride_session_id=s.ride_session_id where s.group_id=?", Integer.class, group));

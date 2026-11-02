@@ -26,6 +26,27 @@ class RideControllerTests {
     @MockitoBean RideService rides;
     @MockitoBean com.ridesync.server.service.RideFinishService finishService;
 
+    @Test void recordRejectsInvalidNumbersBeforeService() throws Exception {
+        for(String body : new String[]{"{}", "{\"distance\":null,\"averageSpeed\":1}", "{\"distance\":1}",
+                "{\"distance\":-1,\"averageSpeed\":1}", "{\"distance\":1,\"averageSpeed\":-1}",
+                "{\"distance\":0.001,\"averageSpeed\":1}", "{\"distance\":1,\"averageSpeed\":1.001}",
+                "{\"distance\":100000000,\"averageSpeed\":1}", "{\"distance\":1,\"averageSpeed\":100000000}"}) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/rides/10/record")
+                    .header("Authorization",token()).contentType("application/json").content(body))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        verifyNoInteractions(rides);
+    }
+    @Test void recordUsesJwtUserAndAcceptsBoundaryValues() throws Exception {
+        var request = new com.ridesync.server.dto.SaveRideRecordRequest(java.math.BigDecimal.ZERO,new java.math.BigDecimal("99999999.99"));
+        when(rides.saveRecord(2L,10L,request)).thenReturn(new com.ridesync.server.dto.RideRecordResponse(10L,request.distance(),request.averageSpeed()));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/rides/10/record")
+                .header("Authorization",token()).contentType("application/json").content("{\"distance\":0,\"averageSpeed\":99999999.99,\"userId\":99}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$.rideSessionId").value(10)).andExpect(jsonPath("$.distance").value(0))
+                .andExpect(jsonPath("$.averageSpeed").value(99999999.99));
+        verify(rides).saveRecord(2L,10L,request);
+    }
     String token() {
         when(users.existsById(2L)).thenReturn(true);
         return "Bearer " + jwt.createToken(2L);

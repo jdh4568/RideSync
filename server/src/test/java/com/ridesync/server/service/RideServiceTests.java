@@ -56,6 +56,20 @@ class RideServiceTests {
         verifyNoInteractions(members);
     }
 
+    @Test void recordRejectsReadyAndRidingWithoutChangingExistingValues() {
+        var ride = session();
+        var member = new RideSessionMember();
+        member.setDistance(new java.math.BigDecimal("7.50"));
+        when(members.findForRecordUpdate(10L,1L)).thenReturn(Optional.of(member));
+        var request = new com.ridesync.server.dto.SaveRideRecordRequest(java.math.BigDecimal.ONE,java.math.BigDecimal.TEN);
+        for(String state : new String[]{"READY","RIDING"}) {
+            ride.setStatus(state);
+            assertEquals("RIDE_NOT_FINISHED",assertThrows(ApiException.class,()->service.saveRecord(1L,10L,request)).getCode());
+            assertEquals(new java.math.BigDecimal("7.50"),member.getDistance());
+            assertNull(member.getAverageSpeed());
+        }
+    }
+
     @Test void rideConnectionRequiresMembershipAndRidingStatus() {
         var ride = session(); ride.setStatus("RIDING");
         assertEquals("FORBIDDEN", assertThrows(ApiException.class,

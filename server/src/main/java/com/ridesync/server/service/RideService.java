@@ -1,6 +1,8 @@
 package com.ridesync.server.service;
 
 import com.ridesync.server.dto.RideResponse;
+import com.ridesync.server.dto.RideRecordResponse;
+import com.ridesync.server.dto.SaveRideRecordRequest;
 import com.ridesync.server.exception.ApiException;
 import com.ridesync.server.repository.RideSessionMemberRepository;
 import com.ridesync.server.repository.RideSessionRepository;
@@ -15,6 +17,22 @@ import org.springframework.transaction.annotation.Transactional;
 public class RideService {
     private final RideSessionRepository rides;
     private final RideSessionMemberRepository members;
+
+    @Transactional
+    public RideRecordResponse saveRecord(Long userId, Long rideSessionId,
+                                                               SaveRideRecordRequest request) {
+        var ride = rides.findById(rideSessionId).orElseThrow(() ->
+                new ApiException(HttpStatus.NOT_FOUND, "RIDE_SESSION_NOT_FOUND", "존재하지 않는 라이딩 세션입니다."));
+        var member = members.findForRecordUpdate(rideSessionId, userId).orElseThrow(() ->
+                new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "해당 라이딩 참여자만 기록을 저장할 수 있습니다."));
+        if (!"FINISHED".equals(ride.getStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "RIDE_NOT_FINISHED", "종료된 라이딩만 기록을 저장할 수 있습니다.");
+        }
+        member.setDistance(request.distance());
+        member.setAverageSpeed(request.averageSpeed());
+        // 기존 참여 행만 갱신한다. 행 잠금을 커밋까지 유지하여 동시 요청의 두 값이 섞이지 않게 한다.
+        return new RideRecordResponse(rideSessionId, member.getDistance(), member.getAverageSpeed());
+    }
 
     public String requireRidingParticipant(Long userId, Long rideSessionId) {
         var ride = rides.findById(rideSessionId).orElseThrow(() ->
