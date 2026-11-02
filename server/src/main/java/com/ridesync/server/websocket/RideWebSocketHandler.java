@@ -37,8 +37,10 @@ public class RideWebSocketHandler extends TextWebSocketHandler {
             String path = session.getUri().getPath();
             long rideId = Long.parseLong(path.substring(path.lastIndexOf('/') + 1));
             if (rideId <= 0) throw new NumberFormatException();
-            String role = rides.requireRidingParticipant(userId, rideId);
-            connections.register(rideId, userId, role, session, expiresAt);
+            synchronized (connections.lifecycleLock(rideId)) {
+                String role = rides.requireRidingParticipant(userId, rideId);
+                connections.register(rideId, userId, role, session, expiresAt);
+            }
         } catch (NumberFormatException exception) {
             reject(session, "INVALID_REQUEST", "라이딩 세션 ID를 확인해주세요.");
         } catch (ApiException exception) {
@@ -57,27 +59,31 @@ public class RideWebSocketHandler extends TextWebSocketHandler {
         var participant = connections.authenticatedParticipant(session);
         if (participant.isEmpty()) return;
         var sender = participant.get();
-        try {
-            var root = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(message.getPayload());
-            if (root == null || !root.isObject() || !root.path("type").isString()) throw invalidMessage();
-            if (!"RIDE_SIGNAL".equals(root.path("type").asText())) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "UNSUPPORTED_MESSAGE_TYPE", "지원하지 않는 메시지 타입입니다.");
-            }
-            if (!root.path("signal").isString() || !SIGNALS.contains(root.path("signal").asText())) throw invalidMessage();
-            // 접속 이후에도 DB의 세션 상태 및 발신자 역할을 확인한다.
-            if (!"LEADER".equals(rides.requireRidingParticipant(sender.userId(), sender.rideId()))) {
-                throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "선두만 수신호를 전송할 수 있습니다.");
-            }
-            connections.sendToMembers(sender.rideId(), json.writeValueAsString(
-                    new RideSignalMessage("RIDE_SIGNAL", sender.userId(), root.path("signal").asText())));
-        } catch (JacksonException exception) {
-            sendError(session, "INVALID_MESSAGE", "메시지 형식을 확인해주세요.");
-        } catch (ApiException exception) {
-            sendError(session, exception.getCode(), exception.getMessage());
-            if ("RIDE_NOT_ACTIVE".equals(exception.getCode()) || "RIDE_SESSION_NOT_FOUND".equals(exception.getCode())) {
-                connections.disconnect(session, CloseStatus.POLICY_VIOLATION);
+        synchronized (connections.lifecycleLock(sender.rideId())) {
+            if (connections.authenticatedParticipant(session).isEmpty()) return;
+            try {
+                var root = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(message.getPayload());
+                if (root == null || !root.isObject() || !root.path("type").isString()) throw invalidMessage();
+                if (!"RIDE_SIGNAL".equals(root.path("type").asText())) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "UNSUPPORTED_MESSAGE_TYPE", "지원하지 않는 메시지 타입입니다.");
+                }
+                if (!root.path("signal").isString() || !SIGNALS.contains(root.path("signal").asText())) throw invalidMessage();
+                // 접속 이후에도 DB의 세션 상태 및 발신자 역할을 확인한다.
+                if (!"LEADER".equals(rides.requireRidingParticipant(sender.userId(), sender.rideId()))) {
+                    throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "선두만 수신호를 전송할 수 있습니다.");
+                }
+                connections.sendToMembers(sender.rideId(), json.writeValueAsString(
+                        new RideSignalMessage("RIDE_SIGNAL", sender.userId(), root.path("signal").asText())));
+            } catch (JacksonException exception) {
+                sendError(session, "INVALID_MESSAGE", "메시지 형식을 확인해주세요.");
+            } catch (ApiException exception) {
+                sendError(session, exception.getCode(), exception.getMessage());
+                if ("RIDE_NOT_ACTIVE".equals(exception.getCode()) || "RIDE_SESSION_NOT_FOUND".equals(exception.getCode())) {
+                    connections.disconnect(session, CloseStatus.POLICY_VIOLATION);
+                }
             }
         }
+
     }
 
     private ApiException invalidMessage() {

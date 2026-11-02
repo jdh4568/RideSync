@@ -27,6 +27,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class RideWebSocketLiveTests {
     @Value("${local.server.port}") int port;
     @Autowired JdbcTemplate jdbc;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    com.ridesync.server.repository.RideSessionRepository rideRepository;
+    @jakarta.persistence.PersistenceContext jakarta.persistence.EntityManager entityManager;
     final JsonMapper json = JsonMapper.builder().build();
     final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     final List<String> accounts = new ArrayList<>();
@@ -192,6 +195,78 @@ class RideWebSocketLiveTests {
         jdbc.update("update ride_session set status='FINISHED' where ride_session_id=?",r.id());
         var ended = ridePeer(r.member(),r.id()); error(ended,"RIDE_NOT_ACTIVE"); ended.closed.get(5,TimeUnit.SECONDS);
         leader.send(Map.of("type","RIDE_SIGNAL","signal","LEFT")); error(leader,"RIDE_NOT_ACTIVE"); leader.closed.get(5,TimeUnit.SECONDS);
+    }
+    @Test void finishPersistsBeforeNotificationAndClosesOnlyTargetRide() throws Exception {
+        var r = riding(); var other = riding(); var outsider = account();
+        var leader = ridePeer(r.owner(),r.id()); var member = ridePeer(r.member(),r.id());
+        var second = ridePeer(r.member(),r.id()); var foreign = ridePeer(other.member(),other.id());
+        for(var p : List.of(leader,member,second,foreign)) p.quiet();
+        String path = "/api/v1/rides/" + r.id() + "/finish";
+        call(path,null,null,401); call(path,r.member(),null,403); call(path,outsider,null,403);
+        call("/api/v1/rides/" + Long.MAX_VALUE + "/finish",r.owner(),null,404);
+        var result = call(path,r.owner(),null,200);
+        assertEquals(3,result.size()); assertEquals(r.id(),result.get("rideSessionId").asLong());
+        assertEquals("FINISHED",result.get("status").asText()); java.time.LocalDateTime.parse(result.get("endedAt").asText());
+        assertEquals("FINISHED",jdbc.queryForObject("select status from ride_session where ride_session_id=?",String.class,r.id()));
+        assertNotNull(jdbc.queryForObject("select ended_at from ride_session where ride_session_id=?",java.sql.Timestamp.class,r.id()));
+        for(var p : List.of(leader,member,second)) {
+            var message = p.next("RIDE_FINISHED"); assertEquals(2,message.size()); assertEquals(r.id(),message.get("rideSessionId").asLong());
+            p.closed.get(5,TimeUnit.SECONDS); p.quiet();
+        }
+        foreign.quiet(); assertFalse(foreign.closed.isDone());
+        assertEquals(result,call(path,r.owner(),null,200));
+        var rejected = ridePeer(r.member(),r.id()); error(rejected,"RIDE_NOT_ACTIVE"); rejected.closed.get(5,TimeUnit.SECONDS);
+        assertEquals(2,jdbc.queryForObject("select count(*) from ride_session_member where ride_session_id=?",Integer.class,r.id()));
+        // 로그인 연결은 라이딩 종료 이후에도 유지된다.
+        for(var p : peers.subList(0,4)) { assertFalse(p.closed.isDone()); p.quiet(); }
+    }
+
+    @Test void finishRollbackKeepsConnectionsAndAllowsRetry() throws Exception {
+        var r = riding(); var leader = ridePeer(r.owner(),r.id()); var member = ridePeer(r.member(),r.id());
+        leader.quiet(); member.quiet(); var flushed = new java.util.concurrent.atomic.AtomicBoolean();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            entityManager.flush();
+            assertEquals("FINISHED",jdbc.queryForObject("select status from ride_session where ride_session_id=?",String.class,r.id()));
+            flushed.set(true); throw new IllegalStateException("Intentional finish failure after actual UPDATE");
+        }).when(rideRepository).saveAndFlush(org.mockito.ArgumentMatchers.any(com.ridesync.server.entity.RideSession.class));
+        String path = "/api/v1/rides/" + r.id() + "/finish";
+        try { call(path,r.owner(),null,500); } finally { org.mockito.Mockito.reset(rideRepository); }
+        assertTrue(flushed.get());
+        assertEquals("RIDING",jdbc.queryForObject("select status from ride_session where ride_session_id=?",String.class,r.id()));
+        assertNull(jdbc.queryForObject("select ended_at from ride_session where ride_session_id=?",java.sql.Timestamp.class,r.id()));
+        leader.quiet(); member.quiet(); assertFalse(leader.closed.isDone()); assertFalse(member.closed.isDone());
+        leader.send(Map.of("type","RIDE_SIGNAL","signal","LEFT")); member.next("RIDE_SIGNAL");
+        call(path,r.owner(),null,200); leader.next("RIDE_FINISHED"); member.next("RIDE_FINISHED");
+        leader.closed.get(5,TimeUnit.SECONDS); member.closed.get(5,TimeUnit.SECONDS);
+    }
+
+    @Test void concurrentFinishSignalAndNewConnectionStayOrdered() throws Exception {
+        var r = riding(); var leader = ridePeer(r.owner(),r.id()); var member = ridePeer(r.member(),r.id());
+        leader.quiet(); member.quiet(); var gate = new CountDownLatch(1); var pool = Executors.newFixedThreadPool(4);
+        String path = "/api/v1/rides/" + r.id() + "/finish";
+        try {
+            var first = pool.submit(() -> { gate.await(); return call(path,r.owner(),null,200); });
+            var second = pool.submit(() -> { gate.await(); return call(path,r.owner(),null,200); });
+            var signal = pool.submit(() -> { gate.await(); try { leader.send(Map.of("type","RIDE_SIGNAL","signal","STOP")); }
+                catch(ExecutionException e) { assertInstanceOf(java.io.IOException.class,e.getCause()); } return true; });
+            var connect = pool.submit(() -> { gate.await(); return ridePeer(r.member(),r.id()); });
+            gate.countDown(); assertEquals(first.get(15,TimeUnit.SECONDS),second.get(15,TimeUnit.SECONDS)); signal.get(10,TimeUnit.SECONDS);
+            var added = connect.get(10,TimeUnit.SECONDS);
+            leader.next("RIDE_FINISHED"); leader.closed.get(5,TimeUnit.SECONDS);
+            for(var p : List.of(member,added)) {
+                p.closed.get(5,TimeUnit.SECONDS);
+                var messages = new ArrayList<String>(); p.messages.drainTo(messages); assertFalse(messages.isEmpty());
+                var last = json.readTree(messages.get(messages.size()-1));
+                if(last.get("type").asText().equals("ERROR")) {
+                    assertSame(added,p); assertEquals("RIDE_NOT_ACTIVE",last.get("code").asText()); assertEquals(1,messages.size());
+                } else {
+                    assertEquals("RIDE_FINISHED",last.get("type").asText());
+                    assertEquals(1,messages.stream().filter(m -> json.readTree(m).get("type").asText().equals("RIDE_FINISHED")).count());
+                    for(int i=0;i<messages.size()-1;i++) assertEquals("RIDE_SIGNAL",json.readTree(messages.get(i)).get("type").asText());
+                }
+                p.quiet();
+            }
+        } finally { gate.countDown(); pool.shutdownNow(); }
     }
     void assertNoRideRecords(long group) {
         assertEquals(0, jdbc.queryForObject("select count(*) from ride_session where group_id=?", Integer.class, group));

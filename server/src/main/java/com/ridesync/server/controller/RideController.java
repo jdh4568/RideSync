@@ -11,6 +11,13 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class RideController {
     private final RideService rides;
+    private final com.ridesync.server.service.RideFinishService finishService;
+
+    @PostMapping("/{rideSessionId}/finish")
+    public com.ridesync.server.dto.FinishRideResponse finish(@AuthenticationPrincipal Long userId,
+                                                          @PathVariable Long rideSessionId) {
+        return finishService.finish(userId, rideSessionId);
+    }
 
     @GetMapping("/{rideSessionId}")
     public RideResponse getRide(@AuthenticationPrincipal Long userId, @PathVariable Long rideSessionId) {

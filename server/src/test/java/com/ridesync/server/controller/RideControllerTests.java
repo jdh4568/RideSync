@@ -24,6 +24,7 @@ class RideControllerTests {
     @Autowired JwtTokenProvider jwt;
     @MockitoBean UserRepository users;
     @MockitoBean RideService rides;
+    @MockitoBean com.ridesync.server.service.RideFinishService finishService;
 
     String token() {
         when(users.existsById(2L)).thenReturn(true);

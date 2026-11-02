@@ -10,6 +10,22 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class RideConnectionRegistry {
+    // 고정 개수 잠금으로 세션 ID별 잠금 객체가 무한히 쌓이지 않게 한다.
+    private final Object[] lifecycleLocks = java.util.stream.IntStream.range(0, 64)
+            .mapToObj(i -> new Object()).toArray();
+
+    public Object lifecycleLock(Long rideId) {
+        return lifecycleLocks[Math.floorMod(rideId.hashCode(), lifecycleLocks.length)];
+    }
+
+    // 호출자는 lifecycleLock을 커밋부터 알림·정리 완료까지 유지한다.
+    public void finish(Long rideId, String payload) {
+        for (Connection c : connections.values()) {
+            if (!c.rideId.equals(rideId)) continue;
+            sendToSession(c.session, payload);
+            disconnect(c.session, CloseStatus.NORMAL);
+        }
+    }
     private final ConcurrentHashMap<String, Connection> connections = new ConcurrentHashMap<>();
 
     public record Participant(Long rideId, Long userId) {}
