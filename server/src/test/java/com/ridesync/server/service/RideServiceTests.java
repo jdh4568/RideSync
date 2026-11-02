@@ -55,4 +55,21 @@ class RideServiceTests {
         assertEquals("RIDE_SESSION_NOT_FOUND", error.getCode());
         verifyNoInteractions(members);
     }
+
+    @Test void rideConnectionRequiresMembershipAndRidingStatus() {
+        var ride = session(); ride.setStatus("RIDING");
+        assertEquals("FORBIDDEN", assertThrows(ApiException.class,
+                () -> service.requireRidingParticipant(1L, 10L)).getCode());
+        var member = new RideSessionMember(); member.setRole("LEADER");
+        when(members.findByRideSession_IdAndUser_Id(10L, 1L)).thenReturn(Optional.of(member));
+        assertEquals("LEADER", service.requireRidingParticipant(1L, 10L));
+        member.setRole("MEMBER"); assertEquals("MEMBER", service.requireRidingParticipant(1L, 10L));
+        for (String state : new String[]{"READY", "FINISHED"}) {
+            ride.setStatus(state);
+            assertEquals("RIDE_NOT_ACTIVE", assertThrows(ApiException.class,
+                    () -> service.requireRidingParticipant(1L, 10L)).getCode());
+        }
+        assertEquals("RIDE_SESSION_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.requireRidingParticipant(1L, 999L)).getCode());
+    }
 }

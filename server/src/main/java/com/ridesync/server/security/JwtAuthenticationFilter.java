@@ -35,7 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new JwtException("Bearer 토큰이 필요합니다.");
             }
             userId = tokenProvider.getUserId(header.substring(7).trim());
-            if (request.getServletPath().equals("/ws/login")) {
+            if (request.getServletPath().equals("/ws/login") || request.getServletPath().startsWith("/ws/ride/")) {
                 expiresAt = tokenProvider.getExpiration(header.substring(7).trim());
             }
         } catch (JwtException | IllegalArgumentException exception) {

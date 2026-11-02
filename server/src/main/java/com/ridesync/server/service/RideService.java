@@ -16,6 +16,17 @@ public class RideService {
     private final RideSessionRepository rides;
     private final RideSessionMemberRepository members;
 
+    public String requireRidingParticipant(Long userId, Long rideSessionId) {
+        var ride = rides.findById(rideSessionId).orElseThrow(() ->
+                new ApiException(HttpStatus.NOT_FOUND, "RIDE_SESSION_NOT_FOUND", "존재하지 않는 라이딩 세션입니다."));
+        var member = members.findByRideSession_IdAndUser_Id(rideSessionId, userId).orElseThrow(() ->
+                new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "해당 라이딩 참여자만 연결할 수 있습니다."));
+        if (!"RIDING".equals(ride.getStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "RIDE_NOT_ACTIVE", "주행 중인 세션이 아닙니다.");
+        }
+        return member.getRole();
+    }
+
     public RideResponse getRide(Long userId, Long rideSessionId) {
         var ride = rides.findById(rideSessionId).orElseThrow(() ->
                 new ApiException(HttpStatus.NOT_FOUND, "RIDE_SESSION_NOT_FOUND", "존재하지 않는 라이딩 세션입니다."));
