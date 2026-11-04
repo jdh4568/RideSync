@@ -121,6 +121,10 @@ public class GroupService {
         return groupRepository.findMyGroups(userId);
     }
 
+    public List<GroupListResponse> getOwnedGroups(Long userId) {
+        return groupRepository.findOwnedGroups(userId);
+    }
+
     @Transactional
     public CreateGroupResponse createGroup(Long userId, CreateGroupRequest request) {
         User owner = userRepository.findById(userId)

@@ -26,6 +26,20 @@ public interface RidingGroupRepository extends JpaRepository<RidingGroup, Long> 
     List<GroupListResponse> findGroupList(@Param("userId") Long userId);
 
     @Query("""
+            select new com.ridesync.server.dto.GroupListResponse(
+                g.id, g.groupName, g.description, count(approved.id),
+                g.maxMembers, mine.status, mine.role)
+            from RidingGroup g
+            join GroupMember mine on mine.group = g
+                and mine.user.id = :userId and mine.status = 'APPROVED'
+            left join GroupMember approved on approved.group = g and approved.status = 'APPROVED'
+            where g.owner.id = :userId
+            group by g.id, g.groupName, g.description, g.maxMembers, mine.status, mine.role
+            order by g.id
+            """)
+    List<GroupListResponse> findOwnedGroups(@Param("userId") Long userId);
+
+    @Query("""
             select new com.ridesync.server.dto.MyGroupResponse(
                 g.id, g.groupName, mine.role, count(approved.id))
             from RidingGroup g

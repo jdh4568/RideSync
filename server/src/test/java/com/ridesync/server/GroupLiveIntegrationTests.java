@@ -97,6 +97,60 @@ class GroupLiveIntegrationTests {
     }
 
     @Test
+    void ownedGroupsReturnCardFieldsAndOnlyApprovedOwnersOverHttp() throws Exception {
+        try {
+            Account owner = account();
+            Account member = account();
+            Account pending = account();
+            Account rejected = account();
+            String path = "/api/v1/groups/owned";
+            call("GET", path, null, null, 401);
+            assertEquals(0, call("GET", path, owner, null, 200).size());
+            long first = create(owner);
+            long second = create(owner);
+            long foreign = create(member);
+            String root = "/api/v1/groups/" + first;
+            for (Account applicant : List.of(member, pending, rejected)) {
+                call("POST", root + "/join", applicant, null, 200);
+            }
+            call("POST", root + "/requests/" + member.id() + "/approve", owner, null, 200);
+            call("POST", root + "/requests/" + rejected.id() + "/reject", owner, null, 200);
+            call("POST", "/api/v1/groups/" + foreign + "/join", owner, null, 200);
+            call("POST", "/api/v1/groups/" + foreign + "/requests/" + owner.id() + "/approve", member, null, 200);
+
+            JsonNode owned = call("GET", path, owner, null, 200);
+            assertEquals(2, owned.size());
+            assertEquals(first, owned.get(0).get("groupId").asLong());
+            assertEquals(second, owned.get(1).get("groupId").asLong());
+            assertEquals(7, owned.get(0).size());
+            assertEquals("통합 검증", owned.get(0).get("groupName").asText());
+            assertEquals("검증용", owned.get(0).get("description").asText());
+            assertEquals(2, owned.get(0).get("memberCount").asInt());
+            assertEquals(2, owned.get(0).get("maxMembers").asInt());
+            assertEquals("APPROVED", owned.get(0).get("membershipStatus").asText());
+            assertEquals("OWNER", owned.get(0).get("myRole").asText());
+            assertEquals(1, owned.get(1).get("memberCount").asInt());
+            assertEquals(3, call("GET", "/api/v1/groups/my", owner, null, 200).size());
+            assertEquals(owned.get(0), groupRow(owner, first));
+            JsonNode memberOwned = call("GET", path, member, null, 200);
+            assertEquals(1, memberOwned.size());
+            assertEquals(foreign, memberOwned.get(0).get("groupId").asLong());
+
+            // 비정상 데이터에서도 승인 자격이 없거나 가입 행이 없는 소유자는 제외한다.
+            for (String status : List.of("PENDING", "REJECTED")) {
+                jdbc.update("update group_member set status=? where group_id=? and user_id=?", status, second, owner.id());
+                JsonNode filtered = call("GET", path, owner, null, 200);
+                assertEquals(1, filtered.size());
+                assertEquals(first, filtered.get(0).get("groupId").asLong());
+            }
+            jdbc.update("delete from group_member where group_id=? and user_id=?", second, owner.id());
+            assertEquals(1, call("GET", path, owner, null, 200).size());
+        } finally {
+            cleanup();
+        }
+    }
+
+    @Test
     void authenticationThroughGroupApprovalAndRejectionOverHttp() throws Exception {
         try {
             Account owner = account();

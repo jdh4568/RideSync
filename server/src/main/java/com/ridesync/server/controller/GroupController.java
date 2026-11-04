@@ -61,6 +61,11 @@ public class GroupController {
         return groupService.getMyGroups(userId);
     }
 
+    @GetMapping("/owned")
+    public List<GroupListResponse> getOwnedGroups(@AuthenticationPrincipal Long userId) {
+        return groupService.getOwnedGroups(userId);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CreateGroupResponse createGroup(@AuthenticationPrincipal Long userId,

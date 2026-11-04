@@ -356,6 +356,36 @@ Response
 
 ---
 
+### 7.2 내가 그룹장인 그룹 조회
+
+**GET `/api/v1/groups/owned`**
+
+라이딩 그룹 선택 화면에서 사용한다. JWT 인증이 필요하며 Request body는 없다.
+
+Response (HTTP 200)
+
+```json
+[
+  {
+    "groupId": 1,
+    "groupName": "한강모임",
+    "description": "한강 중심 라이딩",
+    "memberCount": 13,
+    "maxMembers": 20,
+    "membershipStatus": "APPROVED",
+    "myRole": "OWNER"
+  }
+]
+```
+
+- JWT 사용자와 `RIDING_GROUP.owner_id`가 일치하고 해당 사용자가 APPROVED 멤버인 그룹만 반환한다.
+- `memberCount`는 그룹장을 포함한 APPROVED 멤버 수이다. PENDING·REJECTED는 제외한다.
+- 그룹 ID 오름차순으로 반환하며 조회 대상이 없으면 HTTP 200과 빈 배열을 반환한다.
+- 인증이 없으면 401이다. 프론트엔드에서 그룹장 그룹을 별도로 필터링할 필요가 없다.
+- 응답은 전체 그룹 조회와 같은 형식이다. 기존 `/groups` 및 `/groups/my`의 조회 조건과 응답은 유지한다.
+
+---
+
 ## 8. 멤버 선택 및 라이딩 참여 현황
 
 ### 8.1 그룹 멤버 조회
