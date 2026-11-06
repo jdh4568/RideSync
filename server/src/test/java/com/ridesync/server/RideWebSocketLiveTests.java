@@ -76,7 +76,7 @@ class RideWebSocketLiveTests {
                     .timeout(Duration.ofSeconds(5)).header("Authorization", "Bearer " + owner.token()).GET().build();
             var response = client.send(request, HttpResponse.BodyHandlers.ofString());
             assertEquals(200, response.statusCode());
-            for (var row : json.readTree(response.body())) {
+            for (var row : json.readTree(response.body()).get("members")) {
                 if (row.get("userId").asLong() == member.id() && row.get("online").asBoolean() == expected) return;
             }
             Thread.sleep(20);

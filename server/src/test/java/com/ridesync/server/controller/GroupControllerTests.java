@@ -30,7 +30,11 @@ class GroupControllerTests {
         String path = "/api/v1/groups/12/members";
         mvc.perform(get(path)).andExpect(status().isUnauthorized());
         mvc.perform(get(path).header("Authorization", token())).andExpect(status().isNotFound());
-        when(groups.existsById(12L)).thenReturn(true);
+        var group = new com.ridesync.server.entity.RidingGroup();
+        group.setId(12L);
+        group.setGroupName("한강 모임");
+        group.setDescription("한강에서 즐기는 라이딩 동호회");
+        when(groups.findById(12L)).thenReturn(Optional.of(group));
         mvc.perform(get(path).header("Authorization", token())).andExpect(status().isForbidden());
         verify(members, never()).findApprovedMembers(any());
         when(members.existsByGroup_IdAndUser_IdAndStatus(12L, 7L, "APPROVED")).thenReturn(true);
@@ -49,8 +53,21 @@ class GroupControllerTests {
         when(members.findApprovedMembers(12L)).thenReturn(java.util.List.of(a, b));
         when(onlineUsers.isOnline(7L)).thenReturn(true);
         mvc.perform(get(path).header("Authorization", token())).andExpect(status().isOk())
-                .andExpect(content().json("[{\"userId\":7,\"nickname\":\"나\",\"role\":\"OWNER\",\"online\":true},"
-                        + "{\"userId\":9,\"nickname\":\"동료\",\"role\":\"MEMBER\",\"online\":false}]"));
+                .andExpect(content().json("""
+                        {
+                          "groupId": 12,
+                          "groupName": "한강 모임",
+                          "memberCount": 2,
+                          "description": "한강에서 즐기는 라이딩 동호회",
+                          "members": [
+                            {"userId":7,"nickname":"나","role":"OWNER","online":true},
+                            {"userId":9,"nickname":"동료","role":"MEMBER","online":false}
+                          ]
+                        }
+                        """));
+        group.setDescription(null);
+        mvc.perform(get(path).header("Authorization", token())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value(org.hamcrest.Matchers.nullValue()));
     }
     @Test
     void requestListRequiresOwnerAndReturnsEmptyArray() throws Exception {

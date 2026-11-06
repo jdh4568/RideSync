@@ -75,7 +75,7 @@ class GroupLiveIntegrationTests {
     private void awaitMemberOnline(String path, Account viewer, long userId, boolean expected) throws Exception {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
         do {
-            for (JsonNode row : call("GET", path, viewer, null, 200)) {
+            for (JsonNode row : call("GET", path, viewer, null, 200).get("members")) {
                 if (row.get("userId").asLong() == userId && row.get("online").asBoolean() == expected) return;
             }
             Thread.sleep(20);
@@ -197,7 +197,10 @@ class GroupLiveIntegrationTests {
             assertEquals(first, mine.get(0).get("groupId").asLong());
             assertEquals("MEMBER", mine.get(0).get("role").asText());
             String memberPath = root + "/members";
-            JsonNode memberList = call("GET", memberPath, applicant, null, 200);
+            JsonNode response = call("GET", memberPath, applicant, null, 200);
+            assertEquals(first, response.get("groupId").asLong());
+            assertEquals(2, response.get("memberCount").asInt());
+            JsonNode memberList = response.get("members");
             assertEquals(2, memberList.size());
             assertEquals(4, memberList.get(0).size());
             assertFalse(memberList.get(1).get("online").asBoolean());

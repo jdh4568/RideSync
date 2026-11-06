@@ -21,6 +21,7 @@ import com.ridesync.server.dto.MyGroupResponse;
 import com.ridesync.server.dto.GroupJoinRequestResponse;
 import com.ridesync.server.dto.GroupRequestDecisionResponse;
 import com.ridesync.server.dto.GroupMemberResponse;
+import com.ridesync.server.dto.GroupMembersResponse;
 import com.ridesync.server.websocket.OnlineUserRegistry;
 
 @Service
@@ -32,18 +33,19 @@ public class GroupService {
     private final UserRepository userRepository;
     private final OnlineUserRegistry onlineUsers;
 
-    public List<GroupMemberResponse> getMembers(Long userId, Long groupId) {
-        if (!groupRepository.existsById(groupId)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND", "존재하지 않는 그룹입니다.");
-        }
+    public GroupMembersResponse getMembers(Long userId, Long groupId) {
+        RidingGroup group = groupRepository.findById(groupId).orElseThrow(() ->
+                new ApiException(HttpStatus.NOT_FOUND, "GROUP_NOT_FOUND", "존재하지 않는 그룹입니다."));
         if (!memberRepository.existsByGroup_IdAndUser_IdAndStatus(groupId, userId, "APPROVED")) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "승인된 그룹원만 조회할 수 있습니다.");
         }
-        return memberRepository.findApprovedMembers(groupId).stream()
+        List<GroupMemberResponse> members = memberRepository.findApprovedMembers(groupId).stream()
                 .map(member -> new GroupMemberResponse(member.getUser().getId(),
                         member.getUser().getNickname(), member.getRole(),
                         onlineUsers.isOnline(member.getUser().getId())))
                 .toList();
+        return new GroupMembersResponse(group.getId(), group.getGroupName(),
+                (long) members.size(), group.getDescription(), members);
     }
 
     public List<GroupJoinRequestResponse> getJoinRequests(Long ownerId) {

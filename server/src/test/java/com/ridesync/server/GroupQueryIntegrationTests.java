@@ -32,13 +32,18 @@ class GroupQueryIntegrationTests {
         member(g, pending, "MEMBER", "PENDING");
         member(g, rejected, "MEMBER", "REJECTED");
         members.flush();
-        var result = service.getMembers(approved.getId(), g.getId());
+        var response = service.getMembers(approved.getId(), g.getId());
+        assertEquals(g.getId(), response.getGroupId());
+        assertEquals(g.getGroupName(), response.getGroupName());
+        assertEquals(g.getDescription(), response.getDescription());
+        assertEquals(2L, response.getMemberCount());
+        var result = response.getMembers();
         assertEquals(java.util.List.of(owner.getId(), approved.getId()),
                 result.stream().map(com.ridesync.server.dto.GroupMemberResponse::getUserId).toList());
         assertEquals("OWNER", result.get(0).getRole());
         assertEquals(approved.getNickname(), result.get(1).getNickname());
         assertTrue(result.stream().noneMatch(com.ridesync.server.dto.GroupMemberResponse::isOnline));
-        assertEquals(2, service.getMembers(owner.getId(), g.getId()).size());
+        assertEquals(2, service.getMembers(owner.getId(), g.getId()).getMembers().size());
         for (User denied : java.util.List.of(pending, rejected, outsider)) {
             var error = assertThrows(com.ridesync.server.exception.ApiException.class,
                     () -> service.getMembers(denied.getId(), g.getId()));

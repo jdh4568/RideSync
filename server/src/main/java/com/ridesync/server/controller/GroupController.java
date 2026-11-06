@@ -14,7 +14,7 @@ import com.ridesync.server.dto.GroupListResponse;
 import com.ridesync.server.dto.MyGroupResponse;
 import com.ridesync.server.dto.GroupJoinRequestResponse;
 import com.ridesync.server.dto.GroupRequestDecisionResponse;
-import com.ridesync.server.dto.GroupMemberResponse;
+import com.ridesync.server.dto.GroupMembersResponse;
 
 @RestController
 @RequestMapping("/api/v1/groups")
@@ -23,7 +23,7 @@ public class GroupController {
     private final GroupService groupService;
 
     @GetMapping("/{groupId}/members")
-    public List<GroupMemberResponse> getMembers(@AuthenticationPrincipal Long userId,
+    public GroupMembersResponse getMembers(@AuthenticationPrincipal Long userId,
                                                 @PathVariable Long groupId) {
         return groupService.getMembers(userId, groupId);
     }

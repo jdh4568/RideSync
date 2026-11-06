@@ -395,30 +395,39 @@ Response (HTTP 200)
 Response
 
 ```json
-[
-  {
-    "userId": 1,
-    "nickname": "동현",
-    "role": "OWNER",
-    "online": true
-  },
-  {
-    "userId": 2,
-    "nickname": "라이더2",
-    "role": "MEMBER",
-    "online": true
-  },
-  {
-    "userId": 3,
-    "nickname": "라이더3",
-    "role": "MEMBER",
-    "online": false
-  }
-]
+{
+  "groupId": 1,
+  "groupName": "한강 모임",
+  "memberCount": 3,
+  "description": "한강에서 즐기는 라이딩 동호회",
+  "members": [
+    {
+      "userId": 1,
+      "nickname": "동현",
+      "role": "OWNER",
+      "online": true
+    },
+    {
+      "userId": 2,
+      "nickname": "라이더2",
+      "role": "MEMBER",
+      "online": true
+    },
+    {
+      "userId": 3,
+      "nickname": "라이더3",
+      "role": "MEMBER",
+      "online": false
+    }
+  ]
+}
 ```
 
 처리 규칙:
 
+- 응답은 그룹 정보와 `members` 배열을 포함하는 객체이다. 기존 최상위 배열 대신 `members`를 읽는다.
+- `memberCount`는 본인과 그룹장을 포함한 APPROVED 멤버 수이며 `members` 배열 길이와 같다.
+- `description`은 그룹 설명이 없으면 `null`이다.
 - APPROVED 상태의 그룹원만 조회한다.
 - `online`은 WebSocket 접속 상태를 기준으로 판단한다.
 - 현재 로그인한 사용자는 초대 대상에서 제외한다.
