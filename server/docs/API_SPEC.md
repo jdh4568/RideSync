@@ -706,6 +706,7 @@ WebSocket: `/ws/ride/{rideSessionId}`
 | STOP | 정지 |
 | SLOW | 감속 |
 | ROAD_HAZARD | 노면 주의 |
+| CURVE_CAUTION | 커브 주의 |
 | SINGLE_FILE | 한 줄 주행 |
 | DOUBLE_FILE | 두 줄 주행 |
 | LEADER_CHANGE | 선두 교체 요청 |
@@ -1011,7 +1012,7 @@ Response
 
 - `/ws/ride/{rideSessionId}`는 JWT 인증 후 RIDING 세션의 참여자만 등록한다. 그룹 가입 여부가 아닌 RIDE_SESSION_MEMBER를 기준으로 검사한다.
 - 미인증은 HTTP handshake에서 거부한다. 인증 후 잘못된 세션 ID, 없는 세션, 비참여자, READY·FINISHED 세션은 ERROR를 전송하고 1008로 연결을 종료한다. 코드는 각각 INVALID_REQUEST, RIDE_SESSION_NOT_FOUND, FORBIDDEN, RIDE_NOT_ACTIVE이다.
-- 수신호는 명세의 8종만 허용한다. senderId와 대상 세션은 인증 정보·접속 경로로 정하며 메시지의 임의 사용자·세션 ID는 사용하지 않는다. LEADER_CHANGE는 신호만 전달하고 역할을 변경하지 않는다.
+- 수신호는 명세의 9종만 허용한다. senderId와 대상 세션은 인증 정보·접속 경로로 정하며 메시지의 임의 사용자·세션 ID는 사용하지 않는다. LEADER_CHANGE는 신호만 전달하고 역할을 변경하지 않는다.
 - 선두의 메시지는 동일 세션 MEMBER의 모든 유효한 연결로 전달한다. 후미 발신은 FORBIDDEN, 잘못된 JSON·신호는 INVALID_MESSAGE, 다른 type은 UNSUPPORTED_MESSAGE_TYPE 오류를 발신 연결에 반환한다.
 - 라이딩 연결은 `/ws/login`과 별도로 관리한다. JWT 만료, 30초 Ping·90초 초과 Pong 미응답, 전송 실패 시 해당 연결만 정리한다. 연결 종료로 세션 상태·참여 기록을 변경하지 않는다.
 - 재접속은 현재 상태·권한을 다시 검사한다. 수신호를 DB에 저장하거나 재접속 때 재전송하지 않는다.

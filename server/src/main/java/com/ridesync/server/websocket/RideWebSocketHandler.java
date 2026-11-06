@@ -20,7 +20,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class RideWebSocketHandler extends TextWebSocketHandler {
     private static final Set<String> SIGNALS = Set.of("LEFT", "RIGHT", "STOP", "SLOW", "ROAD_HAZARD",
-            "SINGLE_FILE", "DOUBLE_FILE", "LEADER_CHANGE");
+            "SINGLE_FILE", "DOUBLE_FILE", "LEADER_CHANGE", "CURVE_CAUTION");
     private final RideService rides;
     private final RideConnectionRegistry connections;
     private final JsonMapper json;

@@ -164,7 +164,7 @@ class RideWebSocketLiveTests {
         var leader = ridePeer(a.owner(), a.id()); var member = ridePeer(a.member(), a.id());
         var second = ridePeer(a.member(), a.id()); var foreign = ridePeer(b.member(), b.id());
         for (var p : List.of(leader, member, second, foreign)) p.quiet();
-        for (String signal : List.of("LEFT","RIGHT","STOP","SLOW","ROAD_HAZARD","SINGLE_FILE","DOUBLE_FILE","LEADER_CHANGE")) {
+        for (String signal : List.of("LEFT","RIGHT","STOP","SLOW","ROAD_HAZARD","SINGLE_FILE","DOUBLE_FILE","LEADER_CHANGE","CURVE_CAUTION")) {
             leader.send(Map.of("type","RIDE_SIGNAL","signal",signal,"senderId",999,"rideSessionId",b.id()));
             for (var p : List.of(member, second)) {
                 var message = p.next("RIDE_SIGNAL"); assertEquals(3,message.size());
