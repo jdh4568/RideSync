@@ -1,4 +1,4 @@
-package com.example.ridemate_api_test.ui.theme
+package com.example.ridemate_api_test.core.designsystem.theme
 
 import androidx.compose.ui.graphics.Color
 
