@@ -133,6 +133,25 @@ public class RideInvitationService {
         return new CreateRideInvitationResponse(id, group.getId(), "PENDING", ids.size());
     }
 
+    public CancelRideInvitationResponse cancel(Long userId, String id) {
+        Invitation invitation = invitations.get(id);
+        if (invitation == null) throw notFound();
+        synchronized (invitation) {
+            if (!isActive(id, invitation)) throw notFound();
+            if (!invitation.invite.leaderId().equals(userId)) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "초대 생성자만 취소할 수 있습니다.");
+            }
+            // 직렬화 성공 후 제거하고, 시작·응답·복구와 같은 잠금 안에서 알림을 보낸다.
+            String payload = json.writeValueAsString(new RideInviteCancelledMessage(
+                    "RIDE_INVITE_CANCELLED", id, invitation.invite.groupId()));
+            invitations.remove(id, invitation);
+            for (var participant : invitation.status.participants()) {
+                onlineUsers.sendToUser(participant.userId(), payload);
+            }
+            return new CancelRideInvitationResponse(id, "CANCELLED");
+        }
+    }
+
     private record StartedRide(StartRideResponse response, String payload) {}
 
     public StartRideResponse start(Long userId, String id) {

@@ -164,6 +164,108 @@ class RideStartServiceTests {
         } finally { release.countDown(); pool.shutdownNow(); }
     }
 
+    @Test void cancelRemovesInvitationNotifiesEveryStatusAndNeverWritesDatabase() {
+        when(online.isOnline(anyLong())).thenReturn(false);
+        clearInvocations(groups, members, rides, rideMembers, transactions);
+        var result = service.cancel(1L, id);
+        assertEquals(id, result.invitationId());
+        assertEquals("CANCELLED", result.status());
+        String expected = json.writeValueAsString(new com.ridesync.server.dto.RideInviteCancelledMessage(
+                "RIDE_INVITE_CANCELLED", id, 10L));
+        for (long user = 1; user <= 4; user++) verify(online).sendToUser(user, expected);
+        verifyNoMoreInteractions(online);
+        assertTrue(service.findActive(id).isEmpty());
+        assertCode("INVITATION_NOT_FOUND", () -> service.cancel(1L, id));
+        assertCode("INVITATION_NOT_FOUND", () -> service.start(1L, id));
+        assertCode("INVITATION_NOT_FOUND", () -> service.respond(4L, id, true));
+        assertCode("INVITATION_NOT_FOUND", () -> service.respond(4L, id, false));
+        for (long user = 1; user <= 4; user++)
+            service.replay(user, mock(org.springframework.web.socket.WebSocketSession.class));
+        verifyNoMoreInteractions(online);
+        verifyNoInteractions(groups, members, rides, rideMembers, transactions);
+    }
+
+    @Test void cancelRejectsNonCreatorMissingAndExpiredWithoutNotifications() {
+        assertCode("FORBIDDEN", () -> service.cancel(2L, id));
+        assertCode("FORBIDDEN", () -> service.cancel(99L, id));
+        assertTrue(service.findActive(id).isPresent());
+        assertCode("INVITATION_NOT_FOUND", () -> service.cancel(1L, "missing"));
+        when(clock.instant()).thenReturn(now.plusSeconds(1800));
+        assertCode("INVITATION_NOT_FOUND", () -> service.cancel(1L, id));
+        verifyNoInteractions(online, rides, rideMembers);
+    }
+
+    @Test void cancelWorksWithoutAcceptedInviteesAndAfterFailedStart() {
+        String pending = service.create(1L, new CreateRideInvitationRequest(10L, List.of(2L))).invitationId();
+        assertEquals("CANCELLED", service.cancel(1L, pending).status());
+        doThrow(new org.springframework.transaction.TransactionSystemException("commit failure"))
+                .when(transactions).commit(any());
+        assertThrows(org.springframework.transaction.TransactionSystemException.class, () -> service.start(1L, id));
+        assertEquals("CANCELLED", service.cancel(1L, id).status());
+    }
+
+    @Test void cancelWaitsForStartCommitAndDoesNotCancelStartedRide() throws Exception {
+        var committing = new CountDownLatch(1); var release = new CountDownLatch(1);
+        doAnswer(call -> { committing.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS)); return null; })
+                .when(transactions).commit(any());
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var start = pool.submit(() -> service.start(1L, id));
+            assertTrue(committing.await(5, TimeUnit.SECONDS));
+            var cancel = pool.submit(() -> assertCode("INVITATION_NOT_FOUND", () -> service.cancel(1L, id)));
+            release.countDown(); start.get(5, TimeUnit.SECONDS); cancel.get(5, TimeUnit.SECONDS);
+            verify(online, never()).sendToUser(anyLong(), contains("RIDE_INVITE_CANCELLED"));
+            verify(rides, times(1)).save(any());
+        } finally { release.countDown(); pool.shutdownNow(); }
+    }
+
+    @Test void cancellationBlocksConcurrentStartResponseReplayAndDuplicateCancel() throws Exception {
+        var notifying = new CountDownLatch(1); var release = new CountDownLatch(1);
+        doAnswer(call -> { notifying.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS)); return null; })
+                .when(online).sendToUser(eq(1L), contains("RIDE_INVITE_CANCELLED"));
+        var pool = Executors.newFixedThreadPool(5);
+        try {
+            var cancel = pool.submit(() -> service.cancel(1L, id));
+            assertTrue(notifying.await(5, TimeUnit.SECONDS));
+            var start = pool.submit(() -> assertCode("INVITATION_NOT_FOUND", () -> service.start(1L, id)));
+            var response = pool.submit(() -> assertCode("INVITATION_NOT_FOUND", () -> service.respond(4L, id, true)));
+            var duplicate = pool.submit(() -> assertCode("INVITATION_NOT_FOUND", () -> service.cancel(1L, id)));
+            var replay = pool.submit(() -> service.replay(4L, mock(org.springframework.web.socket.WebSocketSession.class)));
+            for (var future : List.of(start, response, duplicate, replay)) future.get(5, TimeUnit.SECONDS);
+            release.countDown(); cancel.get(5, TimeUnit.SECONDS);
+            verify(online, times(4)).sendToUser(anyLong(), contains("RIDE_INVITE_CANCELLED"));
+            verifyNoMoreInteractions(online);
+            verifyNoInteractions(rides, rideMembers);
+        } finally { release.countDown(); pool.shutdownNow(); }
+    }
+
+    @Test void realRegistryDeliversCancellationToMultipleConnectionsDespiteBrokenSession() throws Exception {
+        var registry = new OnlineUserRegistry();
+        var sessions = new ArrayList<org.springframework.web.socket.WebSocketSession>();
+        for (int i = 0; i < 6; i++) {
+            var session = mock(org.springframework.web.socket.WebSocketSession.class);
+            when(session.getId()).thenReturn("cancel-" + i); when(session.isOpen()).thenReturn(true);
+            registry.register(i < 3 ? 1L : (long) i - 1, session, Instant.now().plusSeconds(300));
+            sessions.add(session);
+        }
+        var actual = new RideInvitationService(groups, members, registry, json, clock, rides, rideMembers, transactions);
+        String target = actual.create(1L, new CreateRideInvitationRequest(10L, List.of(2L, 3L, 4L))).invitationId();
+        actual.respond(2L, target, true); actual.respond(3L, target, false);
+        for (var session : sessions) clearInvocations(session);
+        doThrow(new java.io.IOException("broken")).when(sessions.get(0)).sendMessage(any());
+        actual.cancel(1L, target);
+        var expected = new org.springframework.web.socket.TextMessage(json.writeValueAsString(
+                new com.ridesync.server.dto.RideInviteCancelledMessage("RIDE_INVITE_CANCELLED", target, 10L)));
+        for (int i = 1; i < sessions.size(); i++) {
+            verify(sessions.get(i)).sendMessage(expected);
+            verify(sessions.get(i), never()).close(any());
+        }
+        verify(sessions.get(0)).close(org.springframework.web.socket.CloseStatus.SERVER_ERROR);
+        assertTrue(actual.findActive(target).isEmpty());
+        assertTrue(registry.isOnline(1L));
+        verifyNoInteractions(rides, rideMembers);
+    }
+
     void assertCode(String code, Runnable action) {
         assertEquals(code, assertThrows(ApiException.class, action::run).getCode());
     }

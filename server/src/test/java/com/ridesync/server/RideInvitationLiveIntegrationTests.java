@@ -266,6 +266,67 @@ class RideInvitationLiveIntegrationTests {
         return json.readTree(result.body());
     }
 
+    @Test
+    void cancelNotifiesAllStatesAndDevicesAndPreventsReuseWithoutClosingLogin() throws Exception {
+        var owner = account(); var accepted = account(); var rejected = account(); var pending = account();
+        long group = group(owner, accepted, rejected, pending);
+        var leader = connect(owner); var leaderSecond = connect(owner);
+        var rider = connect(accepted); var riderSecond = connect(accepted);
+        var declining = connect(rejected); var waiting = connect(pending);
+        for (var user : List.of(owner, accepted, rejected, pending)) awaitOnline(group, owner, user, true);
+        String id = call("/api/v1/ride-invitations", owner, Map.of("groupId", group,
+                "inviteeIds", List.of(accepted.id(), rejected.id(), pending.id())), 201).get("invitationId").asText();
+        for (var peer : List.of(rider, riderSecond, declining, waiting)) invite(peer, id, group, owner);
+        leader.next("RIDE_INVITE_STATUS"); leaderSecond.next("RIDE_INVITE_STATUS");
+        rider.send(response(id, true)); leader.next("RIDE_INVITE_STATUS"); leaderSecond.next("RIDE_INVITE_STATUS");
+        declining.send(response(id, false)); leader.next("RIDE_INVITE_STATUS"); leaderSecond.next("RIDE_INVITE_STATUS");
+        String cancel = "/api/v1/ride-invitations/" + id + "/cancel";
+        call(cancel, null, null, 401);
+        assertEquals("FORBIDDEN", call(cancel, accepted, null, 403).get("code").asText());
+        var result = call(cancel, owner, null, 200);
+        assertEquals(id, result.get("invitationId").asText()); assertEquals("CANCELLED", result.get("status").asText());
+        for (var peer : List.of(leader, leaderSecond, rider, riderSecond, declining, waiting)) {
+            var message = peer.next("RIDE_INVITE_CANCELLED");
+            assertEquals(3, message.size()); assertEquals(id, message.get("invitationId").asText());
+            assertEquals(group, message.get("groupId").asLong()); assertFalse(peer.closed.isDone());
+        }
+        call(cancel, owner, null, 404);
+        call("/api/v1/ride-invitations/" + id + "/start", owner, null, 404);
+        waiting.send(response(id, true)); error(waiting, "INVITATION_NOT_FOUND");
+        waiting.send(response(id, false)); error(waiting, "INVITATION_NOT_FOUND");
+        for (var user : List.of(owner, accepted, rejected, pending)) connect(user).quiet();
+        assertNoRideRecords(group);
+        assertEquals(4, jdbc.queryForObject("select count(*) from group_member where group_id=? and status='APPROVED'", Integer.class, group));
+    }
+
+    @Test
+    void concurrentHttpStartAndCancelProduceExactlyOneOutcome() throws Exception {
+        var r = ready();
+        var gate = new CountDownLatch(1); var pool = Executors.newFixedThreadPool(2);
+        try {
+            var requests = new ArrayList<Future<HttpResponse<String>>>();
+            for (String action : List.of("start", "cancel")) {
+                requests.add(pool.submit(() -> {
+                    gate.await();
+                    return client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                            + "/api/v1/ride-invitations/" + r.id() + "/" + action))
+                            .timeout(Duration.ofSeconds(10)).header("Authorization", "Bearer " + r.owner().token())
+                            .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+                }));
+            }
+            gate.countDown();
+            var start = requests.get(0).get(15, TimeUnit.SECONDS);
+            var cancel = requests.get(1).get(15, TimeUnit.SECONDS);
+            assertEquals(Set.of(200, 404), Set.of(start.statusCode(), cancel.statusCode()));
+            var failure = start.statusCode() == 404 ? start : cancel;
+            assertEquals("INVITATION_NOT_FOUND", json.readTree(failure.body()).get("code").asText());
+            String type = start.statusCode() == 200 ? "RIDE_STARTED" : "RIDE_INVITE_CANCELLED";
+            r.leader().next(type); r.rider().next(type); r.leader().quiet(); r.rider().quiet();
+            assertEquals(start.statusCode() == 200 ? 1 : 0,
+                    jdbc.queryForObject("select count(*) from ride_session where group_id=?", Integer.class, r.group()));
+        } finally { pool.shutdownNow(); }
+    }
+
     record Ready(Account owner, Account member, long group, String id, Peer leader, Peer rider) {}
 
     Ready ready() throws Exception {

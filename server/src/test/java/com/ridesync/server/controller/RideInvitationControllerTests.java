@@ -30,6 +30,33 @@ class RideInvitationControllerTests {
     }
 
     @Test
+    void cancelUsesAuthenticatedPrincipalAndReturnsContract() throws Exception {
+        when(invitations.cancel(1L, "inv-test")).thenReturn(
+                new com.ridesync.server.dto.CancelRideInvitationResponse("inv-test", "CANCELLED"));
+        mvc.perform(post("/api/v1/ride-invitations/inv-test/cancel").header("Authorization", token()))
+                .andExpect(status().isOk())
+                .andExpect(content().json("{\"invitationId\":\"inv-test\",\"status\":\"CANCELLED\"}"));
+        verify(invitations).cancel(1L, "inv-test");
+    }
+
+    @Test
+    void cancelRejectsMissingAndInvalidTokenAndReturnsServiceErrors() throws Exception {
+        mvc.perform(post("/api/v1/ride-invitations/inv-test/cancel"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/ride-invitations/inv-test/cancel").header("Authorization", "Bearer invalid"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(invitations);
+        for (var status : java.util.List.of(org.springframework.http.HttpStatus.FORBIDDEN,
+                org.springframework.http.HttpStatus.NOT_FOUND)) {
+            String code = status.value() == 403 ? "FORBIDDEN" : "INVITATION_NOT_FOUND";
+            doThrow(new com.ridesync.server.exception.ApiException(status, code, "취소 실패"))
+                    .when(invitations).cancel(1L, "inv-test");
+            mvc.perform(post("/api/v1/ride-invitations/inv-test/cancel").header("Authorization", token()))
+                    .andExpect(status().is(status.value())).andExpect(jsonPath("$.code").value(code));
+        }
+    }
+
+    @Test
     void startsWithJwtPrincipalAndNoRequestBody() throws Exception {
         when(invitations.start(1L, "inv-test")).thenReturn(new com.ridesync.server.dto.StartRideResponse(
                 50L, 10L, "RIDING", java.time.LocalDateTime.of(2026, 11, 2, 9, 0)));
