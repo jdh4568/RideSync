@@ -59,4 +59,4 @@ HTTP 개발 서버 접속은 debug에서만 허용합니다. release는 `ridesyn
 
 로그인 1단계의 구현 범위·Figma 대비 차이·검증 한계는 [검증 기록](docs/LOGIN_UI_VERIFICATION.md)을 참고하세요. 실제 인증 계약은 [서버 API 명세](../server/docs/API_SPEC.md)를 따릅니다.
 
-로그인 2단계의 검증 결과와 실기기 미검증 항목은 [인증 연동 기록](docs/LOGIN_AUTH_VERIFICATION.md)을 참고하세요. 새 화면의 Preview·검증 범위는 [UI 지침](docs/APP_UI_GUIDELINES.md)을 따릅니다.
+로그인 2단계 구현·3단계 로컬 검증 결과와 남은 실기기 확인 절차는 [인증 연동 기록](docs/LOGIN_AUTH_VERIFICATION.md)을 참고하세요. 테스트 12개·디버그 빌드·lint와 임시 화면 기본 Preview 확인을 완료했으며, 실제 서버·실기기 통합 검증은 보류 상태입니다. 새 화면의 Preview·검증 범위는 [UI 지침](docs/APP_UI_GUIDELINES.md)을 따릅니다.
