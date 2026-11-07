@@ -7,12 +7,12 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 
 소스 기준: `app/src/main/java/com/example/ridemate_api_test/`
 
-- `app/navigation`: 앱 진입점 및 향후 화면 이동 구성. 현재는 Figma 기반 로그인 화면을 표시합니다.
-- `app/session`: 향후 로그인 세션과 앱 공통 이벤트 조정.
+- `app/navigation`: 로그인 화면과 연결 완료 후 임시 확인 화면 사이의 이동.
+- `app/session`: 앱이 소유하는 인증·WebSocket 상태, 재연결·만료·로그아웃 조정.
 - `core/designsystem`: 테마와 공통 Compose 컴포넌트.
-- `core/network`, `websocket`, `datastore`, `location`: 공통 플랫폼·통신 기반.
+- `core/network`, `websocket`, `datastore`: 공통 서버 주소, OkHttp WebSocket, Keystore 기반 암호화 저장. `location`은 향후 구현 자리입니다.
 - `core/di`: 현재는 AppContainer를 사용한 수동 의존성 주입.
-- `feature/auth/presentation/login`: 로그인 UI, 입력 상태, 필수값 검사, 준비 중 안내. 실제 인증은 미연동입니다.
+- `feature/auth`: 로그인 UI·입력 검증, Repository, 로그인 API 연동. 회원가입은 아직 준비 중 안내만 표시합니다.
 - `feature/home`, `group`, `invitation`, `ride`: 다음 단계용 패키지 자리. 기능은 아직 구현하지 않았습니다.
 - `feature/connection`: 실행 및 서버 연결 테스트. presentation → domain의 Repository 인터페이스 → data의 구현 순서로 연결됩니다.
 
@@ -23,36 +23,40 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 1. Android Studio에서 이 test_app 디렉터리를 열고 Gradle Sync를 완료합니다.
 2. 휴대폰의 개발자 옵션에서 USB 디버깅을 켜고 PC에 USB로 연결한 뒤 디버깅 허용 팝업을 승인합니다.
 3. Android Studio에서 연결된 기기와 app 실행 구성을 선택하고 Run을 누릅니다.
-4. 첫 화면에 배경·RideMate 로고·아이디/비밀번호·로그인/회원가입 버튼이 표시됩니다. 서버는 필요하지 않습니다.
-5. 빈 입력으로 로그인하면 입력 오류를 표시합니다. 입력이 유효하면 로그인 준비 중 안내를 표시하며, 회원가입 버튼도 준비 중 안내를 표시합니다. 실제 인증·화면 이동·토큰 저장·WebSocket 연결은 하지 않습니다.
+4. 첫 화면에 Figma 기반 로그인 화면이 표시됩니다. 화면 표시 자체에는 서버가 필요하지 않습니다.
+5. 실제 로그인은 PC의 서버를 실행하고 아래 USB 포트 전달을 설정한 뒤 기존 계정으로 시도합니다. API 인증·암호화 저장·WebSocket 연결이 모두 완료되어야 임시 확인 화면으로 이동합니다. 메인 화면과 회원가입은 아직 구현하지 않았습니다.
 
-로그인 화면은 밝은 테마와 Figma 색상을 사용합니다. 입력값은 화면 회전 시 ViewModel 메모리에서 유지하고, 앱 프로세스 재시작 시 초기화합니다. 비밀번호를 영구 저장소나 saved-state Bundle에 저장하지 않습니다.
+로그인 화면은 밝은 테마와 Figma 색상을 사용합니다. 비밀번호는 영구 저장소나 saved-state Bundle에 저장하지 않고 인증 응답 처리 후 입력에서도 지웁니다. JWT·사용자 정보는 Android Keystore의 AES-GCM 키로 암호화하여 백업 제외 내부 파일에 저장합니다. 자동 로그인은 제공하지 않으며 프로세스 재시작 시 저장된 세션을 정리하고 새 로그인을 요구합니다.
 
-## 이후 서버 연결 단계 참고
+## 서버 연결 설정
 
-기존 `feature/connection` 화면과 Repository는 보존했으나 기본 진입점이나 로그인 화면에서 접근하는 메뉴는 제공하지 않습니다. 아래는 해당 연결 테스트 화면을 사용하는 개발 단계의 참고 절차이며, 현재 로그인 화면에서 실행하는 절차가 아닙니다.
+현재 서버의 기본 포트는 `18080`입니다. 앱의 기본 주소는 `http://127.0.0.1:18080`이며 REST와 WebSocket이 같은 설정을 사용합니다. 실제 휴대폰의 localhost는 휴대폰 자신이므로 USB 포트 전달이 필요합니다.
 
 PC에서 서버를 실행한 뒤 PowerShell에서 다음 명령을 실행합니다. 아래 SDK 경로는 기본 설치 위치이며, 다른 위치에 설치했다면 수정하세요.
 
 ```powershell
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices
-& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse tcp:8080 tcp:8080
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse tcp:18080 tcp:18080
 ```
 
-연결 테스트 화면의 서버 주소를 `http://127.0.0.1:8080`으로 두고 '서버 연결 테스트'를 누릅니다.
+임시 확인 화면에는 실제 서버 응답의 닉네임, 연결 상태, 재연결 및 로그아웃 동작만 표시합니다. 제품 메인 화면을 대체하는 디자인은 아닙니다.
 
-여러 기기가 연결되어 있으면 adb에 `-s 기기시리얼`을 추가합니다. USB 재연결 후에는 reverse 명령이 다시 필요할 수 있습니다. 실제 서버 포트가 8080이 아니라면 reverse 명령의 포트와 앱 입력 주소를 맞춥니다. USB reverse를 사용하면 같은 Wi-Fi 연결은 필요하지 않습니다.
+여러 기기가 연결되어 있으면 adb에 `-s 기기시리얼`을 추가합니다. USB 재연결 후에는 reverse 명령이 다시 필요할 수 있습니다. 서버 포트를 기본값 `18080`에서 변경했다면 reverse 명령의 포트와 아래 `ridesyncBaseUrl` 설정을 함께 맞춰 다시 빌드합니다. 로그인 화면에는 서버 주소 입력란이 없습니다. USB reverse를 사용하면 같은 Wi-Fi 연결은 필요하지 않습니다.
 
-테스트는 `GET /api/v1/auth/check-login-id?loginId=ridemate_connection_test`를 호출합니다. HTTP 200과 boolean 타입의 available 응답을 확인하며, true/false 모두 연결 성공입니다. 사용자 생성이나 데이터 변경은 하지 않습니다. 인증·라이딩·WebSocket 전체 기능 검증은 아닙니다.
+주소 변경은 프로젝트 Gradle 속성 `ridesyncBaseUrl` 한 곳에서 관리합니다. 예를 들어 에뮬레이터는 `-PridesyncBaseUrl=http://10.0.2.2:18080`, 외부 연결은 해당 서버의 HTTPS 주소로 빌드합니다. 기존 `feature/connection` 진단 화면은 보존했지만 현재 진입 메뉴는 없습니다.
 
-HTTP 개발 서버 접속은 debug manifest에서만 허용합니다. release에서는 HTTPS 주소를 사용합니다. 연결/읽기 타임아웃은 각각 5초이며 주소는 화면 회전 시 유지되지만 앱 프로세스 재시작 후에는 기본값으로 돌아옵니다.
+HTTP 개발 서버 접속은 debug에서만 허용합니다. release는 `ridesyncBaseUrl`에 HTTPS 주소를 지정해야 하며 HTTP 설정은 요청 전에 거부합니다. 로그인 REST는 연결 10초·읽기 15초·전체 20초 제한을 사용하고 자동 재전송하지 않습니다. WebSocket 연결 실패 시 1·2·4초 간격으로 최대 3회 재시도한 뒤 수동 재연결을 제공합니다.
+
+백그라운드 진입 시 WebSocket과 재연결 작업을 정리하고, 포그라운드 복귀 시 메모리에 남은 유효한 토큰으로 재접속합니다. 백그라운드 초대 수신이나 푸시 알림은 이번 범위가 아닙니다. 초대 메시지 UI는 아직 없으며 알 수 없는/잘못된 텍스트·바이너리 메시지는 무시합니다. 로그아웃·토큰 만료·인증 거절 시 연결과 세션을 정리하고 로그인 화면으로 돌아옵니다.
 
 ## 검증 명령
 
 ```powershell
-.\gradlew.bat :app:assembleDebug :app:lintDebug
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
 로그인 화면은 고정 프레임 대신 가변 너비, 최대 콘텐츠 너비, 스크롤, 시스템 바 및 키보드 여백을 사용합니다. Compose Preview에 390×844, 320×640(글꼴 1.3/2.0), 600×960, 가로 화면, 입력 오류, 샘플 로딩 상태를 정의했습니다. Preview 정의와 실제 렌더링 검증은 구분합니다.
 
 로그인 1단계의 구현 범위·Figma 대비 차이·검증 한계는 [검증 기록](docs/LOGIN_UI_VERIFICATION.md)을 참고하세요. 실제 인증 계약은 [서버 API 명세](../server/docs/API_SPEC.md)를 따릅니다.
+
+로그인 2단계의 검증 결과와 실기기 미검증 항목은 [인증 연동 기록](docs/LOGIN_AUTH_VERIFICATION.md)을 참고하세요. 새 화면의 Preview·검증 범위는 [UI 지침](docs/APP_UI_GUIDELINES.md)을 따릅니다.

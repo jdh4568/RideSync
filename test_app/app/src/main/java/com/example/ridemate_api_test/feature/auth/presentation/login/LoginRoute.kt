@@ -30,6 +30,7 @@ fun LoginRoute(container: AppContainer) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LoginTheme {
         LoginScreen(state, viewModel::updateLoginId, viewModel::updatePassword,
-            viewModel::submit, viewModel::requestSignup, viewModel::dismissNotice)
+            viewModel::submit, viewModel::requestSignup, viewModel::dismissNotice,
+            viewModel::retryConnection, viewModel::cancelLogin)
     }
 }

@@ -8,6 +8,16 @@ import com.example.ridemate_api_test.app.navigation.RideMateApp
 import com.example.ridemate_api_test.core.designsystem.theme.RideMate_api_testTheme
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        (application as RideMateApplication).container.session.setForeground(true)
+    }
+
+    override fun onStop() {
+        if (!isChangingConfigurations) (application as RideMateApplication).container.session.setForeground(false)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

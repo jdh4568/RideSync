@@ -17,6 +17,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        val serverUrl = providers.gradleProperty("ridesyncBaseUrl").orElse("http://127.0.0.1:18080").get()
+        buildConfigField("String", "SERVER_BASE_URL", "\"${serverUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,10 +38,12 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
+    implementation(libs.okhttp)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(platform(libs.androidx.compose.bom))

@@ -24,6 +24,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
@@ -46,12 +48,14 @@ fun LoginScreen(
     onLogin: () -> Unit,
     onSignup: () -> Unit,
     onDismissNotice: () -> Unit,
+    onRetryConnection: () -> Unit = {},
+    onCancelLogin: () -> Unit = {},
 ) {
     val passwordFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val submit = {
-        if (!state.isSubmitting) {
+        if (!state.isSubmitting && !state.hasPendingSession) {
             keyboard?.hide()
             focusManager.clearFocus()
             onLogin()
@@ -105,7 +109,7 @@ fun LoginScreen(
                                     LoginInput(
                                         value = state.loginId, onValueChange = onLoginIdChanged,
                                         label = stringResource(R.string.login_id), icon = R.drawable.login_user,
-                                        enabled = !state.isSubmitting, error = idError,
+                                        enabled = !state.isSubmitting && !state.hasPendingSession, error = idError,
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text,
                                             imeAction = ImeAction.Next, autoCorrectEnabled = false),
                                         keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
@@ -115,7 +119,7 @@ fun LoginScreen(
                                         value = state.password, onValueChange = onPasswordChanged,
                                         label = stringResource(R.string.login_password), icon = R.drawable.login_lock,
                                         modifier = Modifier.focusRequester(passwordFocus),
-                                        enabled = !state.isSubmitting,
+                                        enabled = !state.isSubmitting && !state.hasPendingSession,
                                         error = if (state.passwordRequired) stringResource(R.string.login_password_required) else null,
                                         visualTransformation = PasswordVisualTransformation(),
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password,
@@ -124,17 +128,29 @@ fun LoginScreen(
                                     )
                                     Spacer(Modifier.height(18.dp))
                                     Button(
-                                        onClick = submit, enabled = !state.isSubmitting,
+                                        onClick = if (state.hasPendingSession) onRetryConnection else submit,
+                                        enabled = !state.isSubmitting,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 59.dp),
                                         shape = RoundedCornerShape(12.dp),
                                         border = BorderStroke(1.dp, LoginDesign.Outline),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                                     ) {
-                                        Text(stringResource(if (state.isSubmitting) R.string.login_submitting else R.string.login_submit),
+                                        Text(stringResource(if (state.isSubmitting) state.phase.messageResource()
+                                            else if (state.hasPendingSession) R.string.auth_retry else R.string.login_submit),
                                             style = LoginDesign.Button, textAlign = TextAlign.Center)
                                     }
                                     if (state.isSubmitting) {
                                         LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+                                    }
+                                    state.problem?.let { problem ->
+                                        Text(stringResource(problem.messageResource()),
+                                            color = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite })
+                                    }
+                                    if (state.hasPendingSession) {
+                                        TextButton(onClick = onCancelLogin, modifier = Modifier.fillMaxWidth()) {
+                                            Text(stringResource(R.string.auth_cancel_login))
+                                        }
                                     }
                                     Row(
                                         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -148,7 +164,7 @@ fun LoginScreen(
                                             Modifier.weight(1f).height(1.dp), contentScale = ContentScale.FillBounds)
                                     }
                                     OutlinedButton(
-                                        onClick = onSignup, enabled = !state.isSubmitting,
+                                        onClick = onSignup, enabled = !state.isSubmitting && !state.hasPendingSession,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 59.dp),
                                         shape = RoundedCornerShape(12.dp),
                                         border = BorderStroke(1.dp, LoginDesign.Outline),
@@ -170,7 +186,6 @@ fun LoginScreen(
             onDismissRequest = onDismissNotice,
             title = { Text(stringResource(R.string.login_notice_title)) },
             text = { Text(stringResource(when (notice) {
-                LoginNotice.LOGIN_UNAVAILABLE -> R.string.login_unavailable
                 LoginNotice.SIGNUP_UNAVAILABLE -> R.string.login_signup_unavailable
             })) },
             confirmButton = { TextButton(onClick = onDismissNotice) { Text(stringResource(R.string.login_notice_confirm)) } },
@@ -231,5 +246,6 @@ private fun LoginErrorPreview() {
 @Preview(name = "Loading sample only", showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun LoginLoadingPreview() {
-    LoginTheme { LoginScreen(LoginUiState(isSubmitting = true), {}, {}, {}, {}, {}) }
+    LoginTheme { LoginScreen(LoginUiState(isSubmitting = true,
+        phase = com.example.ridemate_api_test.feature.auth.domain.model.AuthPhase.AUTHENTICATING), {}, {}, {}, {}, {}) }
 }
