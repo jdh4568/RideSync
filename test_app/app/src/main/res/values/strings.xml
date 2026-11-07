@@ -1,3 +1,18 @@
 <resources>
     <string name="app_name">RideMate_api_test</string>
+    <string name="login_brand_ride">Ride</string>
+    <string name="login_brand_mate">Mate</string>
+    <string name="login_id">아이디</string>
+    <string name="login_password">비밀번호</string>
+    <string name="login_submit">로그인</string>
+    <string name="login_submitting">로그인 중…</string>
+    <string name="login_signup">회원가입</string>
+    <string name="login_or">또는</string>
+    <string name="login_id_required">아이디를 입력해 주세요.</string>
+    <string name="login_id_too_long">아이디는 50자 이하로 입력해 주세요.</string>
+    <string name="login_password_required">비밀번호를 입력해 주세요.</string>
+    <string name="login_unavailable">로그인 기능을 준비 중입니다.</string>
+    <string name="login_signup_unavailable">회원가입 기능을 준비 중입니다.</string>
+    <string name="login_notice_title">안내</string>
+    <string name="login_notice_confirm">확인</string>
 </resources>
