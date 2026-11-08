@@ -7,12 +7,12 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 
 소스 기준: `app/src/main/java/com/example/ridemate_api_test/`
 
-- `app/navigation`: 로그인 화면과 연결 완료 후 임시 확인 화면 사이의 이동.
+- `app/navigation`: 로그인·회원가입 화면 및 연결 완료 후 임시 확인 화면 사이의 이동.
 - `app/session`: 앱이 소유하는 인증·WebSocket 상태, 재연결·만료·로그아웃 조정.
 - `core/designsystem`: 테마와 공통 Compose 컴포넌트.
 - `core/network`, `websocket`, `datastore`: 공통 서버 주소, OkHttp WebSocket, Keystore 기반 암호화 저장. `location`은 향후 구현 자리입니다.
 - `core/di`: 현재는 AppContainer를 사용한 수동 의존성 주입.
-- `feature/auth`: 로그인 UI·입력 검증, Repository, 로그인 API 연동. 회원가입은 아직 준비 중 안내만 표시합니다.
+- `feature/auth`: 로그인 UI·입력 검증, Repository, 로그인 API 연동. 회원가입은 화면·이동·로컬 입력 검증까지 구현했으며 중복 확인·가입 API는 미연동입니다.
 - `feature/home`, `group`, `invitation`, `ride`: 다음 단계용 패키지 자리. 기능은 아직 구현하지 않았습니다.
 - `feature/connection`: 실행 및 서버 연결 테스트. presentation → domain의 Repository 인터페이스 → data의 구현 순서로 연결됩니다.
 
@@ -24,7 +24,8 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 2. 휴대폰의 개발자 옵션에서 USB 디버깅을 켜고 PC에 USB로 연결한 뒤 디버깅 허용 팝업을 승인합니다.
 3. Android Studio에서 연결된 기기와 app 실행 구성을 선택하고 Run을 누릅니다.
 4. 첫 화면에 Figma 기반 로그인 화면이 표시됩니다. 화면 표시 자체에는 서버가 필요하지 않습니다.
-5. 실제 로그인은 PC의 서버를 실행하고 아래 USB 포트 전달을 설정한 뒤 기존 계정으로 시도합니다. API 인증·암호화 저장·WebSocket 연결이 모두 완료되어야 임시 확인 화면으로 이동합니다. 메인 화면과 회원가입은 아직 구현하지 않았습니다.
+5. 실제 로그인은 PC의 서버를 실행하고 아래 USB 포트 전달을 설정한 뒤 기존 계정으로 시도합니다. API 인증·암호화 저장·WebSocket 연결이 모두 완료되어야 임시 확인 화면으로 이동합니다. 제품 메인 화면은 아직 구현하지 않았습니다.
+6. 회원가입 버튼으로 가입 화면에 진입하고 뒤로 가기로 돌아올 수 있습니다. 중복 확인·가입 버튼은 로컬 검증 후 준비 중 안내만 표시하며 계정을 만들지 않습니다. 구현 범위와 남은 검증은 [회원가입 개발계획](docs/SIGNUP_DEVELOPMENT_PLAN.md)을 참고하세요.
 
 로그인 화면은 밝은 테마와 Figma 색상을 사용합니다. 비밀번호는 영구 저장소나 saved-state Bundle에 저장하지 않고 인증 응답 처리 후 입력에서도 지웁니다. JWT·사용자 정보는 Android Keystore의 AES-GCM 키로 암호화하여 백업 제외 내부 파일에 저장합니다. 자동 로그인은 제공하지 않으며 프로세스 재시작 시 저장된 세션을 정리하고 새 로그인을 요구합니다.
 

@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import com.example.ridemate_api_test.feature.auth.presentation.login.LoginViewModel
+import com.example.ridemate_api_test.feature.auth.presentation.signup.SignupViewModel
 import com.example.ridemate_api_test.feature.connection.data.repository.ConnectionRepositoryImpl
 import com.example.ridemate_api_test.feature.connection.domain.repository.ConnectionRepository
 
@@ -32,5 +33,6 @@ class AppContainer(context: Context) {
         OkHttpLoginSocket(socketClient, endpoint), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
     val authRepository: AuthRepository = AuthRepositoryImpl(session)
     val loginViewModelFactory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
+    val signupViewModelFactory = viewModelFactory { initializer { SignupViewModel() } }
     val connectionRepository: ConnectionRepository = ConnectionRepositoryImpl()
 }

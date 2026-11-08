@@ -12,7 +12,7 @@ import com.example.ridemate_api_test.core.designsystem.theme.LoginTheme
 import com.example.ridemate_api_test.core.di.AppContainer
 
 @Composable
-fun LoginRoute(container: AppContainer) {
+fun LoginRoute(container: AppContainer, onSignup: () -> Unit) {
     val activity = LocalActivity.current
     val view = LocalView.current
     DisposableEffect(activity, view) {
@@ -30,7 +30,7 @@ fun LoginRoute(container: AppContainer) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LoginTheme {
         LoginScreen(state, viewModel::updateLoginId, viewModel::updatePassword,
-            viewModel::submit, viewModel::requestSignup, viewModel::dismissNotice,
+            viewModel::submit, onSignup, viewModel::dismissNotice,
             viewModel::retryConnection, viewModel::cancelLogin)
     }
 }
