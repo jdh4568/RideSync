@@ -3,7 +3,7 @@ package com.example.ridemate_api_test.feature.auth.presentation.login
 import com.example.ridemate_api_test.feature.auth.domain.model.AuthPhase
 import com.example.ridemate_api_test.feature.auth.domain.model.AuthProblem
 enum class LoginIdError { REQUIRED, TOO_LONG }
-enum class LoginNotice { SIGNUP_UNAVAILABLE }
+enum class LoginNotice { SIGNUP_COMPLETE }
 
 data class LoginUiState(
     val loginId: String = "",

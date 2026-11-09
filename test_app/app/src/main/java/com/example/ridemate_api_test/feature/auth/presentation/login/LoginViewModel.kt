@@ -59,10 +59,9 @@ class LoginViewModel(private val repository: AuthRepository) : ViewModel() {
     fun retryConnection() = repository.retryConnection()
     fun cancelLogin() { repository.logout(); mutableState.update { it.copy(password = "") } }
 
-    fun requestSignup() {
-        if (!mutableState.value.isSubmitting) {
-            mutableState.update { it.copy(notice = LoginNotice.SIGNUP_UNAVAILABLE) }
-        }
+    fun onSignupCompleted(loginId: String) {
+        mutableState.update { it.copy(loginId = loginId, password = "", loginIdError = null,
+            passwordRequired = false, problem = null, notice = LoginNotice.SIGNUP_COMPLETE) }
     }
 
     fun dismissNotice() { mutableState.update { it.copy(notice = null) } }

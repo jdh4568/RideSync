@@ -186,7 +186,7 @@ fun LoginScreen(
             onDismissRequest = onDismissNotice,
             title = { Text(stringResource(R.string.login_notice_title)) },
             text = { Text(stringResource(when (notice) {
-                LoginNotice.SIGNUP_UNAVAILABLE -> R.string.login_signup_unavailable
+                LoginNotice.SIGNUP_COMPLETE -> R.string.signup_complete
             })) },
             confirmButton = { TextButton(onClick = onDismissNotice) { Text(stringResource(R.string.login_notice_confirm)) } },
         )

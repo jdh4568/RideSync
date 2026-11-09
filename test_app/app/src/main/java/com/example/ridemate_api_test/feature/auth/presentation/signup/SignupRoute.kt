@@ -16,13 +16,19 @@ import com.example.ridemate_api_test.core.designsystem.theme.LoginTheme
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SignupRoute(container: AppContainer, onBack: () -> Unit) {
+fun SignupRoute(container: AppContainer, onBack: () -> Unit, onSuccess: (String) -> Unit) {
     val model: SignupViewModel = viewModel(factory = container.signupViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
     val imeVisible = WindowInsets.isImeVisible
     val keyboard = LocalSoftwareKeyboardController.current
-    val leave = { model.reset(); onBack() }
+    val leave = { if (!model.uiState.value.isSubmitting) { model.reset(); onBack() } }
     BackHandler { if (imeVisible) keyboard?.hide() else leave() }
+    LaunchedEffect(state.completedLoginId) {
+        state.completedLoginId?.let { loginId ->
+            onSuccess(loginId)
+            model.reset()
+        }
+    }
     val activity = LocalActivity.current
     val view = LocalView.current
     DisposableEffect(activity, view) {
@@ -40,7 +46,7 @@ fun SignupRoute(container: AppContainer, onBack: () -> Unit) {
     }
     LoginTheme {
         SignupScreen(state, model::update, model::checkAvailability, model::submit,
-            leave, model::dismissNotice)
+            leave)
     }
 }
 

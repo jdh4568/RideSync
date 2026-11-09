@@ -30,7 +30,6 @@
     <string name="auth_server_error">서버에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.</string>
     <string name="auth_invalid_response">서버 응답을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.</string>
     <string name="auth_storage_error">로그인 정보를 안전하게 저장하거나 정리하지 못했습니다. 앱을 다시 실행해 주세요.</string>
-    <string name="login_signup_unavailable">회원가입 기능을 준비 중입니다.</string>
     <string name="login_notice_title">안내</string>
     <string name="login_notice_confirm">확인</string>
     <string name="signup_back">로그인 화면으로 돌아가기</string>
@@ -42,5 +41,16 @@
     <string name="signup_too_long">%1$s 항목은 50자 이하로 입력해 주세요.</string>
     <string name="signup_password_too_long">비밀번호는 UTF-8 기준 72바이트 이하로 입력해 주세요.</string>
     <string name="signup_password_mismatch">비밀번호가 일치하지 않습니다.</string>
-    <string name="signup_unavailable">회원가입 기능을 준비 중입니다. 아직 중복 확인이나 계정 생성은 진행되지 않습니다.</string>
+    <string name="signup_complete">회원가입이 완료되었습니다. 로그인해주세요.</string>
+    <string name="signup_checking">확인 중…</string>
+    <string name="signup_available">사용할 수 있습니다.</string>
+    <string name="signup_taken">이미 사용 중입니다. 다른 값을 입력해 주세요.</string>
+    <string name="signup_submitting">가입 중…</string>
+    <string name="signup_require_checks">입력 조건을 충족하고 아이디와 닉네임의 중복 확인을 완료해 주세요.</string>
+    <string name="signup_uncertain">가입 결과를 확인하지 못했습니다. 계정이 생성되었을 수 있으니 로그인 화면에서 확인해 주세요. 다시 시도하려면 아이디와 닉네임의 중복 확인이 필요합니다.</string>
+    <string name="signup_invalid_request">입력 내용을 확인해 주세요.</string>
+    <string name="signup_duplicate_id">이미 사용 중인 아이디입니다. 다른 아이디로 확인해 주세요.</string>
+    <string name="signup_duplicate_nickname">이미 사용 중인 닉네임입니다. 다른 닉네임으로 확인해 주세요.</string>
+    <string name="signup_duplicate_user">아이디 또는 닉네임이 이미 사용 중입니다. 두 항목을 다시 확인해 주세요.</string>
+    <string name="signup_unauthorized">가입 요청이 서버에서 인증 오류로 거절되었습니다. 잠시 후 다시 시도해 주세요.</string>
 </resources>

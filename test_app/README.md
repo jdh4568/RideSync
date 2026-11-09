@@ -12,7 +12,7 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 - `core/designsystem`: 테마와 공통 Compose 컴포넌트.
 - `core/network`, `websocket`, `datastore`: 공통 서버 주소, OkHttp WebSocket, Keystore 기반 암호화 저장. `location`은 향후 구현 자리입니다.
 - `core/di`: 현재는 AppContainer를 사용한 수동 의존성 주입.
-- `feature/auth`: 로그인 UI·입력 검증, Repository, 로그인 API 연동. 회원가입은 화면·이동·로컬 입력 검증까지 구현했으며 중복 확인·가입 API는 미연동입니다.
+- `feature/auth`: 로그인·회원가입 UI와 입력 검증, Repository, 인증 API 연동. 회원가입은 아이디·닉네임 중복 확인 후 제출하며 성공 시 로그인 화면으로 돌아옵니다. 실제 서버·기기 통합 검증은 남아 있습니다.
 - `feature/home`, `group`, `invitation`, `ride`: 다음 단계용 패키지 자리. 기능은 아직 구현하지 않았습니다.
 - `feature/connection`: 실행 및 서버 연결 테스트. presentation → domain의 Repository 인터페이스 → data의 구현 순서로 연결됩니다.
 
@@ -25,7 +25,7 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 3. Android Studio에서 연결된 기기와 app 실행 구성을 선택하고 Run을 누릅니다.
 4. 첫 화면에 Figma 기반 로그인 화면이 표시됩니다. 화면 표시 자체에는 서버가 필요하지 않습니다.
 5. 실제 로그인은 PC의 서버를 실행하고 아래 USB 포트 전달을 설정한 뒤 기존 계정으로 시도합니다. API 인증·암호화 저장·WebSocket 연결이 모두 완료되어야 임시 확인 화면으로 이동합니다. 제품 메인 화면은 아직 구현하지 않았습니다.
-6. 회원가입 버튼으로 가입 화면에 진입하고 뒤로 가기로 돌아올 수 있습니다. 중복 확인·가입 버튼은 로컬 검증 후 준비 중 안내만 표시하며 계정을 만들지 않습니다. 구현 범위와 남은 검증은 [회원가입 개발계획](docs/SIGNUP_DEVELOPMENT_PLAN.md)을 참고하세요.
+6. 회원가입 버튼으로 가입 화면에 진입합니다. 아이디·닉네임을 각각 중복 확인하고 입력 조건을 충족하면 가입할 수 있습니다. 확인한 값을 수정하면 재확인이 필요합니다. 가입 요청 중에는 입력과 화면 이탈을 제한하며, 성공 시 가입한 아이디와 완료 안내를 로그인 화면에 표시합니다. 자동 로그인은 하지 않습니다. 응답 단절 등으로 가입 여부가 불명확하면 자동 재전송하지 않고 확인 방법을 안내합니다. 구현 범위와 남은 검증은 [회원가입 개발계획](docs/SIGNUP_DEVELOPMENT_PLAN.md)을 참고하세요.
 
 로그인 화면은 밝은 테마와 Figma 색상을 사용합니다. 비밀번호는 영구 저장소나 saved-state Bundle에 저장하지 않고 인증 응답 처리 후 입력에서도 지웁니다. JWT·사용자 정보는 Android Keystore의 AES-GCM 키로 암호화하여 백업 제외 내부 파일에 저장합니다. 자동 로그인은 제공하지 않으며 프로세스 재시작 시 저장된 세션을 정리하고 새 로그인을 요구합니다.
 
