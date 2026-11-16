@@ -53,4 +53,23 @@
     <string name="signup_duplicate_nickname">이미 사용 중인 닉네임입니다. 다른 닉네임으로 확인해 주세요.</string>
     <string name="signup_duplicate_user">아이디 또는 닉네임이 이미 사용 중입니다. 두 항목을 다시 확인해 주세요.</string>
     <string name="signup_unauthorized">가입 요청이 서버에서 인증 오류로 거절되었습니다. 잠시 후 다시 시도해 주세요.</string>
+    <string name="home_notifications">알림</string>
+    <string name="home_start_ride">라이딩 시작</string>
+    <string name="home_groups">그룹 관리</string>
+    <string name="home_statistics">주행 기록</string>
+    <string name="home_total_distance">총 주행 거리</string>
+    <string name="home_average_speed">평균 주행 속도</string>
+    <string name="home_total_rides">총 라이딩 횟수</string>
+    <string name="home_last_ride">마지막 주행일</string>
+    <string name="home_recent_rides">최근 라이딩</string>
+    <string name="home_no_recent_rides">최근 라이딩이 없습니다.</string>
+    <string name="home_distance">%1$skm</string>
+    <string name="home_speed">%1$skm/h</string>
+    <string name="home_count">%1$d회</string>
+    <string name="home_sample_data">주행 기록·최근 라이딩은 임시 데이터입니다.</string>
+    <string name="home_preparing">준비 중인 기능입니다.</string>
+    <string name="home_ok">확인</string>
+    <string name="home_connected">연결되었습니다.</string>
+    <string name="home_reconnecting">다시 연결하고 있습니다.</string>
+    <string name="home_disconnected">연결이 끊겼습니다. 다시 연결해 주세요.</string>
 </resources>

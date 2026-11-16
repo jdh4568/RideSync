@@ -13,7 +13,8 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 - `core/network`, `websocket`, `datastore`: 공통 서버 주소, OkHttp WebSocket, Keystore 기반 암호화 저장. `location`은 향후 구현 자리입니다.
 - `core/di`: 현재는 AppContainer를 사용한 수동 의존성 주입.
 - `feature/auth`: 로그인·회원가입 UI와 입력 검증, Repository, 인증 API 연동. 회원가입은 아이디·닉네임 중복 확인 후 제출하며 성공 시 로그인 화면으로 돌아옵니다. 실제 서버·기기 통합 검증은 남아 있습니다.
-- `feature/home`, `group`, `invitation`, `ride`: 다음 단계용 패키지 자리. 기능은 아직 구현하지 않았습니다.
+- `feature/home`: Figma 기반 메인 UI와 임시 주행 데이터, 준비 중 안내의 1단계 구현 및 빌드·lint·선택한 정적 Preview 확인을 완료했습니다. 팝업 조작·하단 스크롤 등 실행 검증은 남아 있습니다. 현재 로그인 목적지는 임시 확인 화면을 유지하며 실제 세션·메인 연결은 후속 승인 단계입니다. [메인 화면 개발계획](docs/HOME_DEVELOPMENT_PLAN.md)을 참고하세요.
+- `feature/group`, `invitation`, `ride`: 다음 단계용 패키지 자리. 기능은 아직 구현하지 않았습니다.
 - `feature/connection`: 실행 및 서버 연결 테스트. presentation → domain의 Repository 인터페이스 → data의 구현 순서로 연결됩니다.
 
 기능별 presentation에는 Route, Screen, ViewModel, UiState를 둡니다. domain에는 모델과 Repository 인터페이스를, data에는 API/DTO 및 Repository 구현을 둡니다. 추가 local/mapper/usecase/service 패키지는 실제 필요할 때 생성합니다. 빈 패키지는 Git에서 유지되도록 .gitkeep을 사용합니다.
