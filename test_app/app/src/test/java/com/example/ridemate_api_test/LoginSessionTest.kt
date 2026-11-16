@@ -5,6 +5,10 @@ import com.example.ridemate_api_test.core.datastore.TokenStore
 import com.example.ridemate_api_test.core.websocket.*
 import com.example.ridemate_api_test.feature.auth.data.remote.AuthApi
 import com.example.ridemate_api_test.feature.auth.domain.model.*
+import com.example.ridemate_api_test.feature.auth.data.repository.AuthRepositoryImpl
+import com.example.ridemate_api_test.feature.home.presentation.HomeConnectionStatus
+import com.example.ridemate_api_test.feature.home.presentation.HomeNotice
+import com.example.ridemate_api_test.feature.home.presentation.HomeViewModel
 import java.util.concurrent.Executors
 import kotlinx.coroutines.*
 import org.junit.Assert.*
@@ -169,6 +173,39 @@ class LoginSessionTest {
         await { session.state.value.problem == AuthProblem.INVALID_CREDENTIALS }
         assertFalse(session.state.value.enteredSession)
         assertTrue(sockets.connections.isEmpty())
+    }
+
+    @Test fun homeUsesTheSameSessionThroughReconnectAndOfflineLogout() = scenario {
+        val home = HomeViewModel(AuthRepositoryImpl(session), scope)
+        start()
+        assertFalse(session.state.value.enteredSession)
+        assertNull(home.uiState.value.connectionStatus)
+        sockets.connections.single().notify(SocketEvent.Open)
+        await { home.uiState.value.connectionStatus == HomeConnectionStatus.CONNECTED }
+        assertTrue(session.state.value.enteredSession)
+        assertEquals(1, sockets.connections.size)
+        for (i in 0..2) {
+            await { sockets.connections.size == i + 1 }
+            sockets.connections[i].notify(SocketEvent.Failed(AuthProblem.NETWORK))
+        }
+        await { home.uiState.value.connectionStatus == HomeConnectionStatus.DISCONNECTED }
+        assertTrue(session.state.value.enteredSession)
+        home.retryConnection()
+        home.retryConnection()
+        assertEquals(4, sockets.connections.size)
+        assertEquals(1, api.calls)
+        sockets.connections.last().notify(SocketEvent.Open)
+        await { home.uiState.value.connectionStatus == HomeConnectionStatus.CONNECTED }
+        session.setForeground(false)
+        await { home.uiState.value.connectionStatus == HomeConnectionStatus.DISCONNECTED }
+        home.showNotice(HomeNotice.GROUPS)
+        home.logout()
+        await { store.value == null && home.uiState.value.connectionStatus == null }
+        assertFalse(session.state.value.enteredSession)
+        assertNull(session.state.value.user)
+        assertNull(home.uiState.value.notice)
+        assertTrue(sockets.connections.all { it.cancelled })
+        assertEquals(1, api.calls)
     }
 
     companion object {

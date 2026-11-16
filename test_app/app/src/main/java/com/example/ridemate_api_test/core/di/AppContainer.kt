@@ -22,6 +22,7 @@ import com.example.ridemate_api_test.feature.auth.data.remote.HttpSignupApi
 import com.example.ridemate_api_test.feature.auth.data.repository.SignupRepositoryImpl
 import com.example.ridemate_api_test.feature.connection.data.repository.ConnectionRepositoryImpl
 import com.example.ridemate_api_test.feature.connection.domain.repository.ConnectionRepository
+import com.example.ridemate_api_test.feature.home.presentation.HomeViewModel
 
 class AppContainer(context: Context) {
     private val endpoint = ServerEndpoint(BuildConfig.SERVER_BASE_URL, BuildConfig.DEBUG)
@@ -35,6 +36,7 @@ class AppContainer(context: Context) {
         OkHttpLoginSocket(socketClient, endpoint), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
     val authRepository: AuthRepository = AuthRepositoryImpl(session)
     val loginViewModelFactory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
+    val homeViewModelFactory = viewModelFactory { initializer { HomeViewModel(authRepository) } }
     private val signupRepository = SignupRepositoryImpl(HttpSignupApi(client, endpoint))
     val signupViewModelFactory = viewModelFactory { initializer { SignupViewModel(signupRepository) } }
     val connectionRepository: ConnectionRepository = ConnectionRepositoryImpl()

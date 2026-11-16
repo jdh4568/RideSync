@@ -35,6 +35,8 @@ import com.example.ridemate_api_test.R
 import com.example.ridemate_api_test.core.designsystem.theme.HomeDesign
 import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 import com.example.ridemate_api_test.core.designsystem.theme.LoginDesign
+import com.example.ridemate_api_test.feature.auth.domain.model.AuthProblem
+import com.example.ridemate_api_test.feature.auth.presentation.login.messageResource
 
 @Composable
 fun HomeScreen(
@@ -86,7 +88,7 @@ fun HomeScreen(
                 RecentRidesPanel(state.recentRides, stack)
                 Text(stringResource(R.string.home_sample_data), Modifier.fillMaxWidth().padding(top = 10.dp),
                     color = Color.Black, fontSize = 12.sp, textAlign = TextAlign.Center)
-                SessionControls(state.connectionStatus, onRetryConnection, onLogout)
+                SessionControls(state.connectionStatus, state.connectionProblem, onRetryConnection, onLogout)
             }
         }
     }
@@ -208,7 +210,9 @@ private fun RecentRidesPanel(rides: List<HomeRecentRide>, stack: Boolean) {
 }
 
 @Composable
-private fun SessionControls(status: HomeConnectionStatus?, onRetry: () -> Unit, onLogout: () -> Unit) {
+private fun SessionControls(
+    status: HomeConnectionStatus?, problem: AuthProblem?, onRetry: () -> Unit, onLogout: () -> Unit,
+) {
     status?.let {
         val message = when (it) {
             HomeConnectionStatus.CONNECTED -> R.string.home_connected
@@ -218,6 +222,7 @@ private fun SessionControls(status: HomeConnectionStatus?, onRetry: () -> Unit, 
         Surface(Modifier.fillMaxWidth().padding(top = 12.dp), shape = RoundedCornerShape(10.dp)) {
             Column(Modifier.padding(12.dp)) {
                 Text(stringResource(message))
+                problem?.let { Text(stringResource(it.messageResource()), color = MaterialTheme.colorScheme.error) }
                 if (it == HomeConnectionStatus.RECONNECTING) {
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
                 }
@@ -227,7 +232,7 @@ private fun SessionControls(status: HomeConnectionStatus?, onRetry: () -> Unit, 
             }
         }
     }
-    // Stage 1 has no authenticated callbacks: never present logout as successful.
+    // The app-owned session determines availability; a Preview does not perform logout.
     TextButton(onClick = onLogout, enabled = status != null,
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Text(stringResource(R.string.auth_logout))
@@ -237,7 +242,8 @@ private fun SessionControls(status: HomeConnectionStatus?, onRetry: () -> Unit, 
 @Preview(name = "Home", showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun HomePreview() {
-    var state by remember { mutableStateOf(HomeUiState()) }
+    // Sample connection state only; no repository, login, or WebSocket in Preview.
+    var state by remember { mutableStateOf(HomeUiState(connectionStatus = HomeConnectionStatus.CONNECTED)) }
     HomeTheme {
         HomeScreen(state, { state = state.copy(notice = it) },
             { state = state.copy(notice = null) }, {}, {})
