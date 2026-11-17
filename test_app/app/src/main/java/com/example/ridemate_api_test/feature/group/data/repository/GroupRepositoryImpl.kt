@@ -1,0 +1,15 @@
+package com.example.ridemate_api_test.feature.group.data.repository
+
+import com.example.ridemate_api_test.core.network.*
+import com.example.ridemate_api_test.feature.group.data.remote.GroupApi
+import com.example.ridemate_api_test.feature.group.domain.model.*
+import com.example.ridemate_api_test.feature.group.domain.repository.GroupRepository
+
+class GroupRepositoryImpl(private val api: GroupApi, private val session: AuthenticatedSession) : GroupRepository {
+    override suspend fun groups() = authorized { api.groups(it) }
+    override suspend fun join(groupId: Long) = authorized { api.join(it, groupId) }
+    override suspend fun create(request: CreateGroup) = authorized { api.create(it, request) }
+
+    private suspend fun <T> authorized(request: suspend (String) -> T): T = try { session.authenticated(request) }
+    catch (_: UnauthorizedRequest) { throw GroupFailure(GroupProblem.UNAUTHORIZED) }
+}

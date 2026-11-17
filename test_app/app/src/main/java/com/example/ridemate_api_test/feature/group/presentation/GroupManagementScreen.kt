@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ridemate_api_test.R
 import com.example.ridemate_api_test.core.designsystem.theme.HomeDesign
 import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
+import com.example.ridemate_api_test.feature.group.domain.model.GroupProblem
 
 internal object GroupDesign {
     val Primary = Color(0xFF0683EA)
@@ -60,8 +61,7 @@ fun GroupManagementScreen(
                 Text(stringResource(R.string.home_groups), Modifier.weight(1f).semantics { heading() },
                     fontSize = 20.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
                 TextButton(onClick = onRefresh,
-                    enabled = state.listStatus != GroupListStatus.PREPARING &&
-                        state.listStatus != GroupListStatus.LOADING && !state.isRefreshing && !state.isCreating &&
+                    enabled = state.listStatus != GroupListStatus.LOADING && !state.isRefreshing && !state.isCreating &&
                         state.joiningGroupId == null,
                     contentPadding = PaddingValues(horizontal = 4.dp), modifier = Modifier.widthIn(min = 48.dp)) {
                     Text(stringResource(R.string.group_refresh), fontSize = 12.sp, color = Color.Black)
@@ -71,8 +71,20 @@ fun GroupManagementScreen(
                 contentPadding = PaddingValues(start = 26.dp, end = 26.dp, top = 14.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (state.isRefreshing) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                state.notice?.let { notice -> item {
+                    GroupMessage(when (notice) {
+                        GroupNotice.JOINED -> R.string.group_join_success
+                        GroupNotice.CREATED -> R.string.group_create_success
+                        GroupNotice.JOIN_UNCERTAIN -> R.string.group_join_uncertain
+                    })
+                } }
+                if (state.notice != GroupNotice.JOIN_UNCERTAIN) state.actionProblem?.let { problem ->
+                    item { GroupMessage(problem.messageResource()) }
+                }
+                if (state.listStatus == GroupListStatus.CONTENT) state.listProblem?.let { problem ->
+                    item { GroupMessage(problem.messageResource()) }
+                }
                 when (state.listStatus) {
-                    GroupListStatus.PREPARING -> item { GroupMessage(R.string.group_api_preparing) }
                     GroupListStatus.LOADING -> item {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
@@ -80,7 +92,7 @@ fun GroupManagementScreen(
                         }
                     }
                     GroupListStatus.ERROR -> item {
-                        GroupMessage(R.string.group_list_error)
+                        GroupMessage(state.listProblem?.messageResource() ?: R.string.group_list_error)
                         TextButton(onClick = onRefresh, enabled = !state.isRefreshing) {
                             Text(stringResource(R.string.group_retry))
                         }
@@ -90,20 +102,33 @@ fun GroupManagementScreen(
                 items(state.groups, key = { it.id }) { group ->
                     GroupCard(group, isJoining = state.joiningGroupId == group.id,
                         canJoin = state.listStatus == GroupListStatus.CONTENT && !state.isRefreshing &&
-                            state.joiningGroupId == null && !state.isCreating,
+                            state.joiningGroupId == null && !state.isCreating && state.listProblem == null,
                         onJoin = { onJoin(group.id) })
                 }
             }
             GroupPrimaryButton(onClick = onOpenCreation,
+                enabled = state.joiningGroupId == null && !state.isCreating,
                 modifier = Modifier.padding(top = 8.dp, bottom = 24.dp).widthIn(min = 118.dp)) {
                 Text(stringResource(R.string.group_create), fontSize = 15.sp)
             }
         }
     }
     if (state.showCreation) {
-        GroupCreationDialog(state.form, state.isCreating, state.listStatus != GroupListStatus.PREPARING,
-            onFormChange, onDismissCreation, onCreate)
+        GroupCreationDialog(state.form, state.isCreating,
+            onFormChange, onDismissCreation, onCreate, state.formErrors, state.formProblem, state.creationUncertain)
     }
+}
+
+internal fun GroupProblem.messageResource(): Int = when (this) {
+    GroupProblem.NETWORK -> R.string.auth_network_error
+    GroupProblem.UNAUTHORIZED -> R.string.auth_expired
+    GroupProblem.FORBIDDEN -> R.string.auth_forbidden
+    GroupProblem.NOT_FOUND -> R.string.group_not_found
+    GroupProblem.CONFLICT -> R.string.group_conflict
+    GroupProblem.FULL -> R.string.group_full_error
+    GroupProblem.INVALID_REQUEST -> R.string.group_invalid_request
+    GroupProblem.SERVER -> R.string.auth_server_error
+    GroupProblem.INVALID_RESPONSE -> R.string.auth_invalid_response
 }
 
 @Composable

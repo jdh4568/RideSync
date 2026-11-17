@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -16,6 +17,7 @@ import com.example.ridemate_api_test.core.di.AppContainer
 fun GroupManagementRoute(container: AppContainer, onBack: () -> Unit) {
     val model: GroupManagementViewModel = viewModel(factory = container.groupManagementViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(model) { model.enter() }
     val leave = { model.reset(); onBack() }
     BackHandler(enabled = !state.showCreation) { leave() }
     val activity = LocalActivity.current
@@ -34,6 +36,6 @@ fun GroupManagementRoute(container: AppContainer, onBack: () -> Unit) {
     }
     HomeTheme {
         GroupManagementScreen(state, leave, model::openCreation, model::dismissCreation,
-            model::updateForm, onRefresh = {}, onJoin = {}, onCreate = {})
+            model::updateForm, onRefresh = model::refresh, onJoin = model::join, onCreate = model::create)
     }
 }

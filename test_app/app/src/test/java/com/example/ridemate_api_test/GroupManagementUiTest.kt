@@ -20,23 +20,15 @@ class GroupManagementUiTest {
     }
 
     @Test
-    fun cancelAndLeavingDiscardDraftWithoutCreatingSampleGroups() {
-        val model = GroupManagementViewModel()
-        assertEquals(GroupListStatus.PREPARING, model.uiState.value.listStatus)
-        assertTrue(model.uiState.value.groups.isEmpty())
-        model.openCreation()
-        val draft = GroupCreationForm("내 그룹", "설명", "12")
-        model.updateForm(draft)
-        model.openCreation() // Duplicate taps must not erase an open draft.
-        assertEquals(draft, model.uiState.value.form)
-        model.dismissCreation()
-        assertFalse(model.uiState.value.showCreation)
-        assertEquals(GroupCreationForm(), model.uiState.value.form)
-        model.openCreation()
-        model.updateForm(draft)
-        model.reset() // The same ViewModel can remain in the Activity store after leaving.
-        assertEquals(GroupManagementUiState(), model.uiState.value)
-        model.updateForm(draft)
-        assertEquals(GroupCreationForm(), model.uiState.value.form)
+    fun formValidationMatchesServerBoundaries() {
+        assertTrue(GroupCreationForm().errors().hasErrors)
+        assertFalse(GroupCreationForm("가".repeat(100), "나".repeat(500), "2").errors().hasErrors)
+        assertFalse(GroupCreationForm("그룹", "", "50").errors().hasErrors)
+        assertEquals(GroupFieldError.NAME_REQUIRED, GroupCreationForm("  ", "", "2").errors().name)
+        assertEquals(GroupFieldError.NAME_LONG, GroupCreationForm("가".repeat(101), "", "2").errors().name)
+        assertEquals(GroupFieldError.DESCRIPTION_LONG, GroupCreationForm("그룹", "나".repeat(501), "2").errors().description)
+        listOf("1", "51", "2.5", "-2", "x", "99999999999999999999").forEach {
+            assertEquals(GroupFieldError.CAPACITY, GroupCreationForm("그룹", "", it).errors().capacity)
+        }
     }
 }

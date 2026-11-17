@@ -1,6 +1,7 @@
 package com.example.ridemate_api_test
 
 import com.example.ridemate_api_test.app.session.LoginSession
+import com.example.ridemate_api_test.core.network.UnauthorizedRequest
 import com.example.ridemate_api_test.core.datastore.TokenStore
 import com.example.ridemate_api_test.core.websocket.*
 import com.example.ridemate_api_test.feature.auth.data.remote.AuthApi
@@ -70,6 +71,54 @@ class LoginSessionTest {
                 try { withTimeout(5_000) { Fixture(scope).block() } } finally { scope.cancel() }
             }
         }
+    }
+
+    @Test fun protectedRequest401EndsOnlyItsOwnSessionAndClearsStorage() = scenario {
+        start()
+        sockets.connections.last().notify(SocketEvent.Open)
+        await { session.state.value.enteredSession }
+        try {
+            session.authenticated<Unit> { token ->
+                assertEquals("test-token", token)
+                throw UnauthorizedRequest()
+            }
+            fail("Expected rejection")
+        } catch (_: UnauthorizedRequest) { }
+        await { store.value == null }
+        assertEquals(AuthProblem.EXPIRED, session.state.value.problem)
+        assertFalse(session.state.value.enteredSession)
+        assertTrue(sockets.connections.last().cancelled)
+    }
+
+    @Test fun lateProtectedRequestCannotReturnDataOrExpireANewerSession() = scenario {
+        start()
+        sockets.connections.last().notify(SocketEvent.Open)
+        await { session.state.value.enteredSession }
+        val gate = CompletableDeferred<Unit>()
+        val old = scope.async {
+            session.authenticated<Unit> {
+                gate.await()
+                throw UnauthorizedRequest()
+            }
+        }
+        yield()
+        session.logout()
+        await { store.value == null }
+        session.login("again", "password")
+        await { sockets.connections.size == 2 }
+        sockets.connections.last().notify(SocketEvent.Open)
+        await { session.state.value.enteredSession }
+        gate.complete(Unit)
+        try { old.await(); fail("Expected stale request cancellation") }
+        catch (_: CancellationException) { }
+        assertTrue(session.state.value.enteredSession)
+        assertNull(session.state.value.problem)
+        assertEquals(2, api.calls)
+        session.logout()
+        var requested = false
+        try { session.authenticated { requested = true }; fail("Signed out") }
+        catch (_: UnauthorizedRequest) { }
+        assertFalse(requested)
     }
 
     @Test fun loginWaitsForSocketAndIgnoresOldCallbacksAfterLogout() = scenario {

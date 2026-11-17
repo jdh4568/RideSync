@@ -1,6 +1,8 @@
 package com.example.ridemate_api_test.app.session
 
 import com.example.ridemate_api_test.core.datastore.TokenStore
+import com.example.ridemate_api_test.core.network.AuthenticatedSession
+import com.example.ridemate_api_test.core.network.UnauthorizedRequest
 import com.example.ridemate_api_test.core.websocket.*
 import com.example.ridemate_api_test.feature.auth.data.remote.AuthApi
 import com.example.ridemate_api_test.feature.auth.domain.model.*
@@ -16,7 +18,7 @@ class LoginSession(
     private val scope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,
     private val retryDelays: List<Long> = listOf(1_000, 2_000, 4_000),
-) {
+) : AuthenticatedSession {
     private val mutableState = MutableStateFlow(AuthState())
     val state = mutableState.asStateFlow()
     private var credentials: AuthCredentials? = null
@@ -94,6 +96,28 @@ class LoginSession(
     }
 
     fun logout() = endSession(null)
+
+    override suspend fun <T> authenticated(request: suspend (String) -> T): T =
+        withContext(scope.coroutineContext.minusKey(Job)) {
+            val current = credentials ?: throw UnauthorizedRequest()
+            if (!state.value.enteredSession) throw UnauthorizedRequest()
+            if (current.expiresAtMillis <= now()) {
+                endSession(AuthProblem.EXPIRED)
+                throw UnauthorizedRequest()
+            }
+            val ticket = generation
+            try {
+                val result = request(current.accessToken)
+                ensureActive()
+                if (ticket != generation) throw CancellationException("Session changed")
+                result
+            } catch (failure: Exception) {
+                ensureActive()
+                if (ticket != generation) throw CancellationException("Session changed")
+                if (failure is UnauthorizedRequest) endSession(AuthProblem.EXPIRED)
+                throw failure
+            }
+        }
 
     private fun endSession(problem: AuthProblem?) {
         val ticket = ++generation
