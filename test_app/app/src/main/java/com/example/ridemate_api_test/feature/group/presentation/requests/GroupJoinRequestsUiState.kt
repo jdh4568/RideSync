@@ -1,11 +1,22 @@
 package com.example.ridemate_api_test.feature.group.presentation.requests
 
-enum class GroupJoinRequestsStatus { PREPARING, CONTENT, EMPTY }
+import com.example.ridemate_api_test.feature.group.domain.model.*
 
-/** Presentation data; no sample requests are supplied to the runtime route. */
-data class GroupJoinRequestItem(val id: Long, val nickname: String, val groupName: String)
+enum class GroupJoinRequestsStatus { LOADING, CONTENT, EMPTY, NON_LEADER, ERROR }
+enum class GroupRequestsNotice { APPROVED, REJECTED, UNCERTAIN, CHANGED }
 
 data class GroupJoinRequestsUiState(
-    val status: GroupJoinRequestsStatus = GroupJoinRequestsStatus.PREPARING,
-    val requests: List<GroupJoinRequestItem> = emptyList(),
-)
+    val status: GroupJoinRequestsStatus = GroupJoinRequestsStatus.LOADING,
+    val requests: List<GroupJoinRequest> = emptyList(),
+    val visible: Boolean = false,
+    val refreshing: Boolean = false,
+    val processingId: Long? = null,
+    val listProblem: GroupProblem? = null,
+    val actionProblem: GroupProblem? = null,
+    val notice: GroupRequestsNotice? = null,
+    val needsVerification: Boolean = false,
+    val fullGroupIds: Set<Long> = emptySet(),
+) {
+    val canRespond get() = visible && status == GroupJoinRequestsStatus.CONTENT && !refreshing &&
+        processingId == null && !needsVerification && listProblem == null
+}

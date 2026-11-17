@@ -29,9 +29,14 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.ridemate_api_test.R
 import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 import com.example.ridemate_api_test.feature.group.presentation.GroupDesign
+import com.example.ridemate_api_test.feature.group.presentation.messageResource
+import com.example.ridemate_api_test.feature.group.domain.model.*
 
 @Composable
-internal fun GroupJoinRequestsDialog(state: GroupJoinRequestsUiState, onDismiss: () -> Unit) {
+internal fun GroupJoinRequestsDialog(
+    state: GroupJoinRequestsUiState, onDismiss: () -> Unit, onRetry: () -> Unit,
+    onRespond: (Long, GroupRequestDecision) -> Unit,
+) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(
         dismissOnBackPress = true, dismissOnClickOutside = true,
         usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
@@ -39,7 +44,7 @@ internal fun GroupJoinRequestsDialog(state: GroupJoinRequestsUiState, onDismiss:
         // This full-window modal owns outside taps, including the inset area.
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.matchParentSize().pointerInput(onDismiss) { detectTapGestures { onDismiss() } })
-            GroupJoinRequestsPlacement { modifier -> GroupJoinRequestsContent(state, modifier) }
+            GroupJoinRequestsPlacement { modifier -> GroupJoinRequestsContent(state, modifier, onRetry, onRespond) }
         }
     }
 }
@@ -58,7 +63,10 @@ private fun GroupJoinRequestsPlacement(content: @Composable (Modifier) -> Unit) 
 }
 
 @Composable
-internal fun GroupJoinRequestsContent(state: GroupJoinRequestsUiState, modifier: Modifier = Modifier) {
+internal fun GroupJoinRequestsContent(
+    state: GroupJoinRequestsUiState, modifier: Modifier = Modifier, onRetry: () -> Unit = {},
+    onRespond: (Long, GroupRequestDecision) -> Unit = { _, _ -> },
+) {
     val title = stringResource(R.string.group_requests_title)
     Surface(modifier.semantics { paneTitle = title }
         // Consume panel taps so only the surrounding modal backdrop closes it.
@@ -68,19 +76,31 @@ internal fun GroupJoinRequestsContent(state: GroupJoinRequestsUiState, modifier:
             Text(title, Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 24.dp)
                 .semantics { heading() }, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
             HorizontalDivider(color = GroupDesign.InputBorder, thickness = 0.5.dp)
+            if (state.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (state.status == GroupJoinRequestsStatus.CONTENT && state.requests.isNotEmpty()) {
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                    item { RequestsFeedback(state, onRetry) }
                     items(state.requests, key = { it.id }) { request ->
-                        RequestRow(request)
+                        RequestRow(request, state, onRespond)
                         HorizontalDivider(color = GroupDesign.InputBorder, thickness = 0.5.dp)
                     }
                 }
             } else {
                 Box(Modifier.weight(1f).fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                    Text(stringResource(if (state.status == GroupJoinRequestsStatus.PREPARING)
-                        R.string.group_requests_preparing else R.string.group_requests_empty),
-                        modifier = Modifier.verticalScroll(rememberScrollState()),
-                        fontSize = 14.sp, lineHeight = 22.sp, textAlign = TextAlign.Center)
+                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        when (state.status) {
+                            GroupJoinRequestsStatus.LOADING -> Text(stringResource(R.string.group_requests_loading))
+                            GroupJoinRequestsStatus.EMPTY, GroupJoinRequestsStatus.NON_LEADER -> {
+                                Text(stringResource(R.string.group_requests_empty), textAlign = TextAlign.Center)
+                                if (state.status == GroupJoinRequestsStatus.NON_LEADER) Text(
+                                    stringResource(R.string.group_requests_non_leader), Modifier.padding(top = 8.dp),
+                                    fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
+                            }
+                            else -> Unit
+                        }
+                        RequestsFeedback(state, onRetry)
+                    }
                 }
             }
         }
@@ -89,25 +109,61 @@ internal fun GroupJoinRequestsContent(state: GroupJoinRequestsUiState, modifier:
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RequestRow(request: GroupJoinRequestItem) {
+private fun RequestRow(request: GroupJoinRequest, state: GroupJoinRequestsUiState,
+    onRespond: (Long, GroupRequestDecision) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
         Text(stringResource(R.string.group_requests_message, request.nickname, request.groupName),
             fontSize = 12.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+        if (state.processingId == request.id) Text(stringResource(R.string.group_requests_processing),
+            Modifier.padding(top = 4.dp), fontSize = 12.sp, lineHeight = 20.sp)
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            // API actions are unavailable in stage 1; these rows are used only by Preview.
-            RequestAction(R.string.group_requests_reject, Color(0xFFECEDF0), Color.Black)
-            RequestAction(R.string.group_requests_approve, GroupDesign.Primary, Color.White)
+            RequestAction(R.string.group_requests_reject, Color(0xFFECEDF0), Color.Black, state.canRespond) {
+                onRespond(request.id, GroupRequestDecision.REJECT)
+            }
+            RequestAction(R.string.group_requests_approve, GroupDesign.Primary, Color.White,
+                state.canRespond && request.groupId !in state.fullGroupIds) {
+                onRespond(request.id, GroupRequestDecision.APPROVE)
+            }
         }
     }
 }
 
 @Composable
-private fun RequestAction(label: Int, background: Color, foreground: Color) {
-    Button(onClick = {}, enabled = false, modifier = Modifier.widthIn(min = 55.dp).heightIn(min = 48.dp),
+private fun RequestAction(label: Int, background: Color, foreground: Color, enabled: Boolean, onClick: () -> Unit) {
+    Button(onClick = onClick, enabled = enabled, modifier = Modifier.widthIn(min = 55.dp).heightIn(min = 48.dp),
         shape = RoundedCornerShape(6.dp), border = BorderStroke(0.3.dp, Color(0xFF535353)),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-        colors = ButtonDefaults.buttonColors(disabledContainerColor = background, disabledContentColor = foreground)) {
+        colors = ButtonDefaults.buttonColors(containerColor = background, contentColor = foreground,
+            disabledContainerColor = Color(0xFFECEDF0), disabledContentColor = GroupDesign.Muted)) {
         Text(stringResource(label), fontSize = 12.sp, lineHeight = 20.sp)
+    }
+}
+
+@Composable
+private fun RequestsFeedback(state: GroupJoinRequestsUiState, onRetry: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        val notice = when (state.notice) {
+            GroupRequestsNotice.APPROVED -> R.string.group_requests_approved
+            GroupRequestsNotice.REJECTED -> R.string.group_requests_rejected
+            GroupRequestsNotice.UNCERTAIN -> R.string.group_requests_uncertain
+            GroupRequestsNotice.CHANGED -> R.string.group_requests_changed
+            null -> null
+        }
+        notice?.let { Text(stringResource(it), Modifier.padding(vertical = 8.dp),
+            fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center) }
+        if (state.notice == null) state.actionProblem?.let {
+            Text(stringResource(if (it == GroupProblem.FULL) R.string.group_requests_full else it.messageResource()),
+                Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.error,
+                fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
+        }
+        state.listProblem?.let {
+            Text(stringResource(R.string.group_requests_load_failed, stringResource(it.messageResource())),
+                Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.error,
+                fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
+        }
+        if (state.listProblem != null || state.needsVerification) TextButton(onClick = onRetry,
+            enabled = !state.refreshing && state.processingId == null,
+            modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.group_requests_retry)) }
     }
 }
 
@@ -118,9 +174,9 @@ private fun GroupJoinRequestsPreview() {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f))) {
             GroupJoinRequestsPlacement { modifier ->
                 GroupJoinRequestsContent(GroupJoinRequestsUiState(GroupJoinRequestsStatus.CONTENT, listOf(
-                    GroupJoinRequestItem(1, "홍길동", "A그룹"),
-                    GroupJoinRequestItem(2, "이순신", "A그룹"),
-                )), modifier)
+                    GroupJoinRequest(1, 1, 5, "홍길동", "A그룹"),
+                    GroupJoinRequest(2, 1, 8, "이순신", "A그룹"),
+                ), visible = true), modifier)
             }
         }
     }

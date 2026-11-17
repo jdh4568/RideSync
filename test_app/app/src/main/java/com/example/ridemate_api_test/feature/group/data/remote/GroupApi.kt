@@ -16,9 +16,42 @@ interface GroupApi {
     suspend fun groups(token: String): List<Group>
     suspend fun join(token: String, groupId: Long)
     suspend fun create(token: String, request: CreateGroup): CreatedGroup
+    suspend fun joinRequests(token: String): List<GroupJoinRequest>
+    suspend fun respondToJoinRequest(token: String, groupId: Long, userId: Long, decision: GroupRequestDecision): GroupRequestResult
 }
 
 class HttpGroupApi(private val client: OkHttpClient, private val endpoint: ServerEndpoint) : GroupApi {
+    override suspend fun joinRequests(token: String): List<GroupJoinRequest> =
+        execute(token, "/api/v1/groups/join-requests", null, 200) { body ->
+            val array = JSONArray(body)
+            val requests = (0 until array.length()).map { index ->
+                val json = array.getJSONObject(index)
+                require(json.text("status") == "PENDING")
+                GroupJoinRequest(
+                    json.integer("groupMemberId").also { require(it > 0) },
+                    json.integer("groupId").also { require(it > 0) },
+                    json.integer("userId").also { require(it > 0) },
+                    json.text("nickname").also { require(it.isNotBlank()) },
+                    json.text("groupName").also { require(it.isNotBlank()) },
+                )
+            }
+            require(requests.map { it.id }.distinct().size == requests.size)
+            require(requests.map { it.groupId to it.userId }.distinct().size == requests.size)
+            requests
+        }
+
+    override suspend fun respondToJoinRequest(
+        token: String, groupId: Long, userId: Long, decision: GroupRequestDecision,
+    ): GroupRequestResult {
+        require(groupId > 0 && userId > 0)
+        return execute(token, "/api/v1/groups/$groupId/requests/$userId/${decision.path}", "", 200) { body ->
+            val json = JSONObject(body)
+            require(json.integer("groupId") == groupId && json.integer("userId") == userId &&
+                json.text("status") == decision.status.name)
+            GroupRequestResult(groupId, userId, decision.status)
+        }
+    }
+
     override suspend fun groups(token: String): List<Group> =
         execute(token, "/api/v1/groups", null, 200) { body ->
             val array = JSONArray(body)

@@ -33,8 +33,7 @@ fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit) {
         HomeScreen(state, { notice ->
             if (notice == HomeNotice.GROUPS) onOpenGroups() else model.showNotice(notice)
         }, model::dismissNotice, model::retryConnection, model::logout)
-        if (state.notice == HomeNotice.NOTIFICATIONS) {
-            GroupJoinRequestsRoute(onDismiss = model::dismissNotice)
-        }
+        GroupJoinRequestsRoute(container, visible = state.notice == HomeNotice.NOTIFICATIONS,
+            onDismiss = model::dismissNotice)
     }
 }

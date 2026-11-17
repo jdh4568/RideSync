@@ -6,4 +6,6 @@ interface GroupRepository {
     suspend fun groups(): List<Group>
     suspend fun join(groupId: Long)
     suspend fun create(request: CreateGroup): CreatedGroup
+    suspend fun joinRequests(): List<GroupJoinRequest>
+    suspend fun respondToJoinRequest(groupId: Long, userId: Long, decision: GroupRequestDecision): GroupRequestResult
 }
