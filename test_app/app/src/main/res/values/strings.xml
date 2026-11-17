@@ -106,4 +106,10 @@
     <string name="group_description_hint">그룹에 대한 설명을 입력하세요.</string>
     <string name="group_capacity">최대 인원</string>
     <string name="group_capacity_hint">2 ~ 50명 사이로 입력하세요.</string>
+    <string name="group_requests_title">알림 내역</string>
+    <string name="group_requests_preparing">가입 신청 알림 기능을 준비 중입니다.</string>
+    <string name="group_requests_empty">알림이 없습니다.</string>
+    <string name="group_requests_message">%1$s님이 %2$s에 가입을 요청하였습니다.</string>
+    <string name="group_requests_reject">거절</string>
+    <string name="group_requests_approve">수락</string>
 </resources>

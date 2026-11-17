@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 import com.example.ridemate_api_test.core.di.AppContainer
+import com.example.ridemate_api_test.feature.group.presentation.requests.GroupJoinRequestsRoute
 
 @Composable
 fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit) {
@@ -32,5 +33,8 @@ fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit) {
         HomeScreen(state, { notice ->
             if (notice == HomeNotice.GROUPS) onOpenGroups() else model.showNotice(notice)
         }, model::dismissNotice, model::retryConnection, model::logout)
+        if (state.notice == HomeNotice.NOTIFICATIONS) {
+            GroupJoinRequestsRoute(onDismiss = model::dismissNotice)
+        }
     }
 }

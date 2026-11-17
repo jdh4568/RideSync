@@ -100,4 +100,22 @@ class HomeViewModelTest {
         assertNull(model.uiState.value.notice)
         assertEquals(HomeConnectionStatus.CONNECTED, model.uiState.value.connectionStatus)
     }
+
+    @Test fun notificationReopenAndConnectionChangesKeepOneModalWithoutNewSessionRequests() = scenario(connected()) { repository, model ->
+        repeat(3) { model.showNotice(HomeNotice.NOTIFICATIONS) }
+        model.showNotice(HomeNotice.START_RIDE)
+        assertEquals(HomeNotice.NOTIFICATIONS, model.uiState.value.notice)
+        repository.state.value = connected().copy(phase = AuthPhase.DISCONNECTED, problem = AuthProblem.NETWORK)
+        assertEquals(HomeNotice.NOTIFICATIONS, model.uiState.value.notice)
+        model.dismissNotice()
+        assertNull(model.uiState.value.notice)
+        model.showNotice(HomeNotice.NOTIFICATIONS)
+        repository.state.value = connected()
+        assertEquals(HomeNotice.NOTIFICATIONS, model.uiState.value.notice)
+        model.logout()
+        assertNull(model.uiState.value.notice)
+        assertEquals(0, repository.loginCalls)
+        assertEquals(0, repository.retryCalls)
+        assertEquals(1, repository.logoutCalls)
+    }
 }

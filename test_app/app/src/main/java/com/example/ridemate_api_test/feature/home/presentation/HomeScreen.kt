@@ -92,7 +92,7 @@ fun HomeScreen(
             }
         }
     }
-    state.notice?.let { notice ->
+    state.notice?.takeUnless { it == HomeNotice.NOTIFICATIONS }?.let { notice ->
         val title = when (notice) {
             HomeNotice.NOTIFICATIONS -> R.string.home_notifications
             HomeNotice.START_RIDE -> R.string.home_start_ride
