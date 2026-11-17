@@ -12,6 +12,7 @@ import com.example.ridemate_api_test.core.di.AppContainer
 import com.example.ridemate_api_test.feature.auth.presentation.login.LoginRoute
 import com.example.ridemate_api_test.feature.auth.presentation.login.LoginViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ridemate_api_test.feature.group.presentation.GroupManagementRoute
 
 @Composable
 fun RideMateApp(container: AppContainer) {
@@ -20,7 +21,13 @@ fun RideMateApp(container: AppContainer) {
     val loginModel: LoginViewModel = viewModel(factory = container.loginViewModelFactory)
     // No authenticated back stack remains after logout/expiry.
     if (state.enteredSession) {
-        HomeRoute(container)
+        // This state belongs only to the current authenticated composition/user.
+        var showGroups by rememberSaveable(state.user?.id) { mutableStateOf(false) }
+        if (showGroups) {
+            GroupManagementRoute(container, onBack = { showGroups = false })
+        } else {
+            HomeRoute(container, onOpenGroups = { showGroups = true })
+        }
     } else if (showSignup && !state.isBusy && state.user == null) {
         SignupRoute(container, onBack = { showSignup = false }, onSuccess = {
             loginModel.onSignupCompleted(it)

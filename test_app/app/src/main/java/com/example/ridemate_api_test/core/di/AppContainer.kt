@@ -23,6 +23,7 @@ import com.example.ridemate_api_test.feature.auth.data.repository.SignupReposito
 import com.example.ridemate_api_test.feature.connection.data.repository.ConnectionRepositoryImpl
 import com.example.ridemate_api_test.feature.connection.domain.repository.ConnectionRepository
 import com.example.ridemate_api_test.feature.home.presentation.HomeViewModel
+import com.example.ridemate_api_test.feature.group.presentation.GroupManagementViewModel
 
 class AppContainer(context: Context) {
     private val endpoint = ServerEndpoint(BuildConfig.SERVER_BASE_URL, BuildConfig.DEBUG)
@@ -37,6 +38,7 @@ class AppContainer(context: Context) {
     val authRepository: AuthRepository = AuthRepositoryImpl(session)
     val loginViewModelFactory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
     val homeViewModelFactory = viewModelFactory { initializer { HomeViewModel(authRepository) } }
+    val groupManagementViewModelFactory = viewModelFactory { initializer { GroupManagementViewModel() } }
     private val signupRepository = SignupRepositoryImpl(HttpSignupApi(client, endpoint))
     val signupViewModelFactory = viewModelFactory { initializer { SignupViewModel(signupRepository) } }
     val connectionRepository: ConnectionRepository = ConnectionRepositoryImpl()

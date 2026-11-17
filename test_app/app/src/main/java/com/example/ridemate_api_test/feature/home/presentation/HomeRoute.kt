@@ -12,7 +12,7 @@ import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 import com.example.ridemate_api_test.core.di.AppContainer
 
 @Composable
-fun HomeRoute(container: AppContainer) {
+fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit) {
     val model: HomeViewModel = viewModel(factory = container.homeViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
@@ -29,6 +29,8 @@ fun HomeRoute(container: AppContainer) {
         }
     }
     HomeTheme {
-        HomeScreen(state, model::showNotice, model::dismissNotice, model::retryConnection, model::logout)
+        HomeScreen(state, { notice ->
+            if (notice == HomeNotice.GROUPS) onOpenGroups() else model.showNotice(notice)
+        }, model::dismissNotice, model::retryConnection, model::logout)
     }
 }
