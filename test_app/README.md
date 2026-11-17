@@ -14,7 +14,7 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 - `core/di`: 현재는 AppContainer를 사용한 수동 의존성 주입.
 - `feature/auth`: 로그인·회원가입 UI와 입력 검증, Repository, 인증 API 연동. 회원가입은 아이디·닉네임 중복 확인 후 제출하며 성공 시 로그인 화면으로 돌아옵니다. 실제 서버·기기 통합 검증은 남아 있습니다.
 - `feature/home`: Figma 기반 UI·임시 주행 데이터·준비 중 안내와 기존 인증 세션 연결을 구현했습니다. 로그인 목적지는 메인 화면이며 연결 상태·오류·수동 재연결·로그아웃은 기존 AuthRepository를 사용합니다. SM-S947N(Android 16)에서 메인·팝업·하단 스크롤·통신 단절/복구·오프라인 로그아웃·재로그인·글꼴 확대를 확인했습니다. 다른 기기·실제 토큰 만료 등 남은 조건은 [메인 화면 개발계획](docs/HOME_DEVELOPMENT_PLAN.md)을 참고하세요.
-- `feature/group`: 그룹 관리 UI·생성 팝업·메인 왕복 이동과 목록 조회·가입 신청·그룹 생성 API를 연결했습니다. 가입 상태와 조회된 정원에 따라 버튼을 제한하고 성공 후 목록을 갱신합니다. 보호 REST의 JWT 전달·401 세션 종료는 기존 LoginSession을 재사용합니다. 생성 결과가 불명확하면 자동 재전송하지 않고 목록 확인을 안내합니다. 자체 JVM·로컬 HTTP 계약 검증까지 수행했으며 실제 Spring 서버·실기기 검증은 남아 있습니다. [그룹 관리 개발계획](docs/GROUP_MANAGEMENT_DEVELOPMENT_PLAN.md)을 참고하세요.
+- `feature/group`: 그룹 관리 UI·생성 팝업·메인 왕복 이동과 목록 조회·가입 신청·그룹 생성 API를 연결했습니다. 가입 상태와 조회된 정원에 따라 버튼을 제한하고 성공 후 목록을 갱신합니다. 보호 REST의 JWT 전달·401 세션 종료는 기존 LoginSession을 재사용합니다. 생성 결과가 불명확하면 자동 재전송하지 않고 목록 확인을 안내합니다. 자체 JVM·로컬 HTTP 계약 검증과 선택한 오류 Preview를 확인했으며 실제 Spring 서버·실기기 검증은 남아 있습니다. [그룹 관리 개발계획](docs/GROUP_MANAGEMENT_DEVELOPMENT_PLAN.md)과 [사용자 실기기 확인 절차](docs/verification/group-stage3/README.md)를 참고하세요.
 - `feature/invitation`, `ride`: 다음 단계용 패키지 자리. 기능은 아직 구현하지 않았습니다.
 - `feature/connection`: 실행 및 서버 연결 테스트. presentation → domain의 Repository 인터페이스 → data의 구현 순서로 연결됩니다.
 
