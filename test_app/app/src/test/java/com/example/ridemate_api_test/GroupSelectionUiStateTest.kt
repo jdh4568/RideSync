@@ -25,7 +25,7 @@ class GroupSelectionUiStateTest {
 
     @Test fun onlyAGroupInTheCurrentSuccessfulListCanComplete() {
         val selected = content().select(1)
-        for (status in listOf(GroupSelectionStatus.NOT_CONNECTED, GroupSelectionStatus.LOADING, GroupSelectionStatus.ERROR)) {
+        for (status in listOf(GroupSelectionStatus.LOADING, GroupSelectionStatus.ERROR)) {
             val blocked = selected.copy(status = status)
             assertFalse(blocked.canComplete)
             assertEquals(blocked, blocked.select(2).complete())

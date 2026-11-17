@@ -3,14 +3,20 @@ package com.example.ridemate_api_test.feature.group.presentation.selection
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ridemate_api_test.feature.auth.domain.repository.AuthRepository
+import com.example.ridemate_api_test.feature.group.domain.model.GroupFailure
+import com.example.ridemate_api_test.feature.group.domain.model.GroupProblem
+import com.example.ridemate_api_test.feature.group.domain.repository.GroupRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Stage 1 only: no repository query or runtime sample groups. */
 class GroupSelectionViewModel(
+    private val repository: GroupRepository,
     private val auth: AuthRepository,
     private val testScope: CoroutineScope? = null,
 ) : ViewModel() {
@@ -18,9 +24,12 @@ class GroupSelectionViewModel(
     val uiState = mutableState.asStateFlow()
     private var active = false
     private var userId: Long? = null
+    private var generation = 0
+    private var loadJob: Job? = null
+    private val scope get() = testScope ?: viewModelScope
 
     init {
-        (testScope ?: viewModelScope).launch {
+        scope.launch {
             auth.state.collect { state ->
                 if (!state.enteredSession || (active && userId != state.user?.id)) reset()
             }
@@ -31,7 +40,31 @@ class GroupSelectionViewModel(
         if (active || !auth.state.value.enteredSession) return
         active = true
         userId = auth.state.value.user?.id
+        load()
+    }
+
+    fun retry() {
+        if (uiState.value.status == GroupSelectionStatus.ERROR) load()
+    }
+
+    private fun load() {
+        if (!ready() || loadJob?.isActive == true) return
+        val ticket = generation
         mutableState.value = GroupSelectionUiState()
+        loadJob = scope.launch {
+            try {
+                val groups = repository.ownedGroups()
+                ensureActive()
+                if (ticket == generation && ready()) mutableState.value = GroupSelectionUiState(
+                    status = GroupSelectionStatus.CONTENT, groups = groups)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                ensureActive()
+                if (ticket == generation && ready()) mutableState.value = GroupSelectionUiState(
+                    status = GroupSelectionStatus.ERROR,
+                    problem = (failure as? GroupFailure)?.problem ?: GroupProblem.NETWORK)
+            }
+        }
     }
 
     private fun ready() = active && auth.state.value.enteredSession && auth.state.value.user?.id == userId
@@ -49,6 +82,9 @@ class GroupSelectionViewModel(
     }
 
     fun reset() {
+        generation++
+        loadJob?.cancel()
+        loadJob = null
         active = false
         userId = null
         mutableState.value = GroupSelectionUiState()

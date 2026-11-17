@@ -64,9 +64,6 @@ fun GroupSelectionScreen(
                         fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium)
                 }
                 when (state.status) {
-                    GroupSelectionStatus.NOT_CONNECTED -> item {
-                        SelectionMessage(stringResource(R.string.group_selection_not_connected))
-                    }
                     GroupSelectionStatus.LOADING -> item {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()

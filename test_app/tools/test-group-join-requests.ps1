@@ -1,5 +1,6 @@
 param(
-    [string]$AndroidStudioHome = 'C:\Program Files\Android\Android Studio'
+    [string]$AndroidStudioHome = 'C:\Program Files\Android\Android Studio',
+    [string[]]$TestClasses = @('com.example.ridemate_api_test.GroupJoinRequestsHttpTest')
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
@@ -39,6 +40,8 @@ allprojects {
 [IO.File]::WriteAllText($initScript, $script, [Text.UTF8Encoding]::new($false))
 Push-Location $projectRoot
 try {
-    & .\gradlew.bat :app:testDebugUnitTest --tests com.example.ridemate_api_test.GroupJoinRequestsHttpTest --offline --init-script $initScript
+    $testArguments = @(':app:testDebugUnitTest', '--offline', '--init-script', $initScript)
+    foreach ($testClass in $TestClasses) { $testArguments += @('--tests', $testClass) }
+    & .\gradlew.bat @testArguments
     if ($LASTEXITCODE -ne 0) { throw "HTTP contract tests failed: $LASTEXITCODE" }
 } finally { Pop-Location }

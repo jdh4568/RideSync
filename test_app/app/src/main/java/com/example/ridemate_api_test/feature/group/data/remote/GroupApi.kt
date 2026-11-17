@@ -14,6 +14,7 @@ import kotlin.coroutines.resumeWithException
 
 interface GroupApi {
     suspend fun groups(token: String): List<Group>
+    suspend fun ownedGroups(token: String): List<Group>
     suspend fun join(token: String, groupId: Long)
     suspend fun create(token: String, request: CreateGroup): CreatedGroup
     suspend fun joinRequests(token: String): List<GroupJoinRequest>
@@ -53,27 +54,34 @@ class HttpGroupApi(private val client: OkHttpClient, private val endpoint: Serve
     }
 
     override suspend fun groups(token: String): List<Group> =
-        execute(token, "/api/v1/groups", null, 200) { body ->
-            val array = JSONArray(body)
-            val groups = (0 until array.length()).map { index ->
-                val json = array.getJSONObject(index)
-                val id = json.integer("groupId").also { require(it > 0) }
-                val name = json.text("groupName").also { require(it.isNotBlank()) }
-                val description = if (json.has("description") && json.isNull("description")) "" else json.text("description")
-                val count = json.integer("memberCount").also { require(it in 0..Int.MAX_VALUE.toLong()) }.toInt()
-                val max = json.integer("maxMembers").also { require(it in 2..50) }.toInt()
-                require(json.has("membershipStatus"))
-                val status = if (json.isNull("membershipStatus")) Membership.NONE else when (json.text("membershipStatus")) {
-                    "APPROVED" -> Membership.APPROVED
-                    "PENDING" -> Membership.PENDING
-                    "REJECTED" -> Membership.REJECTED
-                    else -> Membership.UNKNOWN
-                }
-                Group(id, name, description, count, max, status)
+        execute(token, "/api/v1/groups", null, 200) { decodeGroups(it) }
+
+    override suspend fun ownedGroups(token: String): List<Group> =
+        execute(token, "/api/v1/groups/owned", null, 200) { decodeGroups(it, owned = true) }
+
+    private fun decodeGroups(body: String, owned: Boolean = false): List<Group> {
+        val array = JSONArray(body)
+        val groups = (0 until array.length()).map { index ->
+            val json = array.getJSONObject(index)
+            val id = json.integer("groupId").also { require(it > 0) }
+            val name = json.text("groupName").also { require(it.isNotBlank()) }
+            val description = if (json.has("description") && json.isNull("description")) "" else json.text("description")
+            val count = json.integer("memberCount").also { require(it in 0..Int.MAX_VALUE.toLong()) }.toInt()
+            val max = json.integer("maxMembers").also { require(it in 2..50) }.toInt()
+            require(json.has("membershipStatus"))
+            val status = if (json.isNull("membershipStatus")) Membership.NONE else when (json.text("membershipStatus")) {
+                "APPROVED" -> Membership.APPROVED
+                "PENDING" -> Membership.PENDING
+                "REJECTED" -> Membership.REJECTED
+                else -> Membership.UNKNOWN
             }
-            require(groups.map { it.id }.distinct().size == groups.size)
-            groups
+            // Reject a broken owned-list contract rather than filtering or showing unauthorized choices.
+            if (owned) require(status == Membership.APPROVED && json.text("myRole") == "OWNER")
+            Group(id, name, description, count, max, status)
         }
+        require(groups.map { it.id }.distinct().size == groups.size)
+        return groups
+    }
 
     override suspend fun join(token: String, groupId: Long) {
         require(groupId > 0)

@@ -42,8 +42,10 @@ class AppContainer(context: Context) {
     val authRepository: AuthRepository = AuthRepositoryImpl(session)
     val loginViewModelFactory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
     val homeViewModelFactory = viewModelFactory { initializer { HomeViewModel(authRepository) } }
-    val groupSelectionViewModelFactory = viewModelFactory { initializer { GroupSelectionViewModel(authRepository) } }
     private val groupRepository = GroupRepositoryImpl(HttpGroupApi(client, endpoint), session)
+    val groupSelectionViewModelFactory = viewModelFactory {
+        initializer { GroupSelectionViewModel(groupRepository, authRepository) }
+    }
     val groupJoinRequestsViewModelFactory = viewModelFactory {
         initializer { GroupJoinRequestsViewModel(groupRepository, authRepository) }
     }

@@ -3,10 +3,10 @@ package com.example.ridemate_api_test.feature.group.presentation.selection
 import com.example.ridemate_api_test.feature.group.domain.model.Group
 import com.example.ridemate_api_test.feature.group.domain.model.GroupProblem
 
-enum class GroupSelectionStatus { NOT_CONNECTED, LOADING, CONTENT, ERROR }
+enum class GroupSelectionStatus { LOADING, CONTENT, ERROR }
 
 data class GroupSelectionUiState(
-    val status: GroupSelectionStatus = GroupSelectionStatus.NOT_CONNECTED,
+    val status: GroupSelectionStatus = GroupSelectionStatus.LOADING,
     val groups: List<Group> = emptyList(),
     val selectedGroupId: Long? = null,
     val problem: GroupProblem? = null,

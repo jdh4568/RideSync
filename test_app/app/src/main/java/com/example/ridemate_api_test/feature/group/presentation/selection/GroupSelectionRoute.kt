@@ -36,6 +36,6 @@ fun GroupSelectionRoute(container: AppContainer, onBack: () -> Unit) {
     }
     HomeTheme {
         GroupSelectionScreen(state, leave, model::select, model::complete, model::dismissDeveloping,
-            onRetry = model::enter)
+            onRetry = model::retry)
     }
 }

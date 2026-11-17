@@ -19,6 +19,7 @@ class GroupManagementViewModelTest {
         override fun logout() { state.value = AuthState(phase = AuthPhase.SIGNED_OUT) }
     }
     private class Repository : GroupRepository {
+        override suspend fun ownedGroups(): List<Group> = error("Not used")
         override suspend fun joinRequests(): List<GroupJoinRequest> = error("Not used")
         override suspend fun respondToJoinRequest(groupId: Long, userId: Long, decision: GroupRequestDecision): GroupRequestResult = error("Not used")
         var list = listOf(Group(1, "그룹", "", 1, 2, Membership.NONE))

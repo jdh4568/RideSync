@@ -19,6 +19,7 @@ class GroupJoinRequestsViewModelTest {
         override fun logout() { state.value = AuthState(phase = AuthPhase.SIGNED_OUT) }
     }
     private class Repository : GroupRepository {
+        override suspend fun ownedGroups(): List<Group> = error("Not used")
         var list = listOf(GroupJoinRequest(15, 1, 5, "신청자", "그룹"))
         var loads = 0
         val decisions = mutableListOf<Triple<Long, Long, GroupRequestDecision>>()
