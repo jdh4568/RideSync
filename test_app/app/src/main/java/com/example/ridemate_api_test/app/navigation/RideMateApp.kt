@@ -13,6 +13,9 @@ import com.example.ridemate_api_test.feature.auth.presentation.login.LoginRoute
 import com.example.ridemate_api_test.feature.auth.presentation.login.LoginViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ridemate_api_test.feature.group.presentation.GroupManagementRoute
+import com.example.ridemate_api_test.feature.group.presentation.selection.GroupSelectionRoute
+
+private enum class AuthenticatedDestination { HOME, GROUPS, GROUP_SELECTION }
 
 @Composable
 fun RideMateApp(container: AppContainer) {
@@ -22,11 +25,19 @@ fun RideMateApp(container: AppContainer) {
     // No authenticated back stack remains after logout/expiry.
     if (state.enteredSession) {
         // This state belongs only to the current authenticated composition/user.
-        var showGroups by rememberSaveable(state.user?.id) { mutableStateOf(false) }
-        if (showGroups) {
-            GroupManagementRoute(container, onBack = { showGroups = false })
-        } else {
-            HomeRoute(container, onOpenGroups = { showGroups = true })
+        var destination by rememberSaveable(state.user?.id) { mutableStateOf(AuthenticatedDestination.HOME) }
+        val backHome = { destination = AuthenticatedDestination.HOME }
+        val open = { target: AuthenticatedDestination ->
+            if (container.authRepository.state.value.enteredSession &&
+                container.authRepository.state.value.user?.id == state.user?.id &&
+                destination == AuthenticatedDestination.HOME) destination = target
+        }
+        when (destination) {
+            AuthenticatedDestination.GROUPS -> GroupManagementRoute(container, onBack = backHome)
+            AuthenticatedDestination.GROUP_SELECTION -> GroupSelectionRoute(container, onBack = backHome)
+            AuthenticatedDestination.HOME -> HomeRoute(container,
+                onOpenGroups = { open(AuthenticatedDestination.GROUPS) },
+                onStartRide = { open(AuthenticatedDestination.GROUP_SELECTION) })
         }
     } else if (showSignup && !state.isBusy && state.user == null) {
         SignupRoute(container, onBack = { showSignup = false }, onSuccess = {

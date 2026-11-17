@@ -13,7 +13,7 @@ import com.example.ridemate_api_test.core.di.AppContainer
 import com.example.ridemate_api_test.feature.group.presentation.requests.GroupJoinRequestsRoute
 
 @Composable
-fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit) {
+fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit, onStartRide: () -> Unit) {
     val model: HomeViewModel = viewModel(factory = container.homeViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
@@ -31,7 +31,13 @@ fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit) {
     }
     HomeTheme {
         HomeScreen(state, { notice ->
-            if (notice == HomeNotice.GROUPS) onOpenGroups() else model.showNotice(notice)
+            if (state.notice == null && container.authRepository.state.value.enteredSession) {
+                when (notice) {
+                    HomeNotice.GROUPS -> onOpenGroups()
+                    HomeNotice.START_RIDE -> onStartRide()
+                    else -> model.showNotice(notice)
+                }
+            }
         }, model::dismissNotice, model::retryConnection, model::logout)
         GroupJoinRequestsRoute(container, visible = state.notice == HomeNotice.NOTIFICATIONS,
             onDismiss = model::dismissNotice)

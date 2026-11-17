@@ -1,0 +1,22 @@
+package com.example.ridemate_api_test.feature.group.presentation.selection
+
+import com.example.ridemate_api_test.feature.group.domain.model.Group
+import com.example.ridemate_api_test.feature.group.domain.model.GroupProblem
+
+enum class GroupSelectionStatus { NOT_CONNECTED, LOADING, CONTENT, ERROR }
+
+data class GroupSelectionUiState(
+    val status: GroupSelectionStatus = GroupSelectionStatus.NOT_CONNECTED,
+    val groups: List<Group> = emptyList(),
+    val selectedGroupId: Long? = null,
+    val problem: GroupProblem? = null,
+    val showDeveloping: Boolean = false,
+) {
+    val canSelect: Boolean get() = status == GroupSelectionStatus.CONTENT && problem == null && !showDeveloping
+    val canComplete: Boolean get() = canSelect && groups.any { it.id == selectedGroupId }
+
+    fun select(groupId: Long): GroupSelectionUiState =
+        if (canSelect && groups.any { it.id == groupId }) copy(selectedGroupId = groupId) else this
+
+    fun complete(): GroupSelectionUiState = if (canComplete) copy(showDeveloping = true) else this
+}
