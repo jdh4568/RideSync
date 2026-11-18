@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -39,8 +41,8 @@ fun GroupSelectionScreen(
     onBack: () -> Unit,
     onSelect: (Long) -> Unit,
     onComplete: () -> Unit,
-    onDismissDeveloping: () -> Unit,
     onRetry: () -> Unit,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     Box(Modifier.fillMaxSize()) {
         Image(painterResource(R.drawable.login_landscape), null, Modifier.matchParentSize(),
@@ -57,6 +59,7 @@ fun GroupSelectionScreen(
                 Spacer(Modifier.width(48.dp))
             }
             LazyColumn(Modifier.weight(1f).widthIn(max = 510.dp).fillMaxWidth().selectableGroup(),
+                state = listState,
                 contentPadding = PaddingValues(start = 26.dp, end = 26.dp, top = 14.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item {
@@ -97,14 +100,6 @@ fun GroupSelectionScreen(
                 }
             }
         }
-    }
-    if (state.showDeveloping) {
-        AlertDialog(onDismissRequest = onDismissDeveloping,
-            title = { Text(stringResource(R.string.group_selection_complete)) },
-            text = { Text(stringResource(R.string.group_selection_developing)) },
-            confirmButton = {
-                TextButton(onClick = onDismissDeveloping) { Text(stringResource(R.string.home_ok)) }
-            })
     }
 }
 
@@ -158,6 +153,6 @@ private fun GroupSelectionPreview() {
         GroupSelectionScreen(GroupSelectionUiState(status = GroupSelectionStatus.CONTENT,
             groups = listOf(Group(1, "한강 모임", "한강 중심 라이딩", 13, 20, Membership.APPROVED),
                 Group(2, "B그룹", "샘플용 그룹", 8, 10, Membership.APPROVED)), selectedGroupId = 1),
-            {}, {}, {}, {}, {})
+            {}, {}, {}, {})
     }
 }

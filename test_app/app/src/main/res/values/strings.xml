@@ -126,5 +126,22 @@
     <string name="group_selection_complete">선택 완료</string>
     <string name="group_selection_empty">그룹장으로 있는 그룹이 없습니다.</string>
     <string name="group_selection_required">함께 라이딩할 그룹을 한 개 선택해 주세요.</string>
-    <string name="group_selection_developing">멤버 선택 화면은 개발 중입니다.</string>
+    <string name="member_selection_title">멤버 선택</string>
+    <string name="member_selection_prompt">멤버를 선택하세요.</string>
+    <string name="member_selection_group_count">%1$d명</string>
+    <string name="member_selection_online">접속 중</string>
+    <string name="member_selection_offline">오프라인</string>
+    <string name="member_selection_offline_unselectable">오프라인, 선택할 수 없습니다.</string>
+    <string name="member_selection_status_unknown">확인 불가</string>
+    <string name="member_selection_snapshot">접속 상태는 마지막 조회 기준입니다.</string>
+    <string name="member_selection_refresh">새로고침</string>
+    <string name="member_selection_not_connected">멤버 목록 연결을 준비 중입니다. 연결이 완료되면 멤버를 선택할 수 있습니다.</string>
+    <string name="member_selection_loading">멤버 목록을 불러오는 중입니다.</string>
+    <string name="member_selection_empty">함께 라이딩할 멤버가 없습니다.</string>
+    <string name="member_selection_all_offline">현재 접속 중인 멤버가 없습니다.</string>
+    <string name="member_selection_uncertain">연결을 확인 중입니다. 접속 상태가 최신이 아닐 수 있습니다.</string>
+    <string name="member_selection_required">멤버를 1명 이상 선택하세요.</string>
+    <string name="member_selection_limit">멤버는 최대 49명까지 선택할 수 있습니다.</string>
+    <string name="member_selection_back_to_groups">그룹 선택으로 돌아가기</string>
+    <string name="member_selection_developing">라이딩 초대 기능은 개발 중입니다.</string>
 </resources>

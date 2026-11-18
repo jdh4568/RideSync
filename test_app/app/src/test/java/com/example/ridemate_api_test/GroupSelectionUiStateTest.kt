@@ -16,7 +16,7 @@ class GroupSelectionUiStateTest {
         val initial = content()
         assertNull(initial.selectedGroupId)
         assertFalse(initial.canComplete)
-        assertFalse(initial.complete().showDeveloping)
+        assertFalse(initial.openMembers().memberSelectionOpen)
         val selected = initial.select(1).select(2)
         assertEquals(2L, selected.selectedGroupId)
         assertTrue(selected.canComplete)
@@ -28,19 +28,19 @@ class GroupSelectionUiStateTest {
         for (status in listOf(GroupSelectionStatus.LOADING, GroupSelectionStatus.ERROR)) {
             val blocked = selected.copy(status = status)
             assertFalse(blocked.canComplete)
-            assertEquals(blocked, blocked.select(2).complete())
+            assertEquals(blocked, blocked.select(2).openMembers())
         }
-        assertFalse(selected.copy(groups = emptyList()).complete().showDeveloping)
-        assertFalse(selected.copy(problem = GroupProblem.NETWORK).complete().showDeveloping)
+        assertFalse(selected.copy(groups = emptyList()).openMembers().memberSelectionOpen)
+        assertFalse(selected.copy(problem = GroupProblem.NETWORK).openMembers().memberSelectionOpen)
         assertFalse(content().copy(groups = emptyList()).canComplete)
     }
 
-    @Test fun developingDialogBlocksRepeatedActionsAndDismissalPreservesSelection() {
-        val opened = content().select(1).complete()
-        assertTrue(opened.showDeveloping)
+    @Test fun memberHandoffBlocksRepeatedActionsAndReturnPreservesSelection() {
+        val opened = content().select(1).openMembers()
+        assertTrue(opened.memberSelectionOpen)
         assertFalse(opened.canComplete)
-        assertEquals(opened, opened.complete().select(2))
-        val dismissed = opened.copy(showDeveloping = false)
+        assertEquals(opened, opened.openMembers().select(2))
+        val dismissed = opened.copy(memberSelectionOpen = false)
         assertEquals(1L, dismissed.selectedGroupId)
         assertTrue(dismissed.canComplete)
     }

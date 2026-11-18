@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ridemate_api_test.feature.auth.domain.repository.AuthRepository
 import com.example.ridemate_api_test.feature.group.domain.model.GroupFailure
+import com.example.ridemate_api_test.feature.group.domain.model.Group
 import com.example.ridemate_api_test.feature.group.domain.model.GroupProblem
 import com.example.ridemate_api_test.feature.group.domain.repository.GroupRepository
 import kotlinx.coroutines.CancellationException
@@ -73,12 +74,19 @@ class GroupSelectionViewModel(
         if (ready()) mutableState.update { it.select(groupId) }
     }
 
-    fun complete() {
-        if (ready()) mutableState.update { it.complete() }
+    fun openMembers(): Group? {
+        if (!ready() || !uiState.value.canComplete) return null
+        val selected = uiState.value.groups.firstOrNull { it.id == uiState.value.selectedGroupId && it.id > 0 }
+            ?: return null
+        mutableState.update { it.openMembers() }
+        return selected
     }
 
-    fun dismissDeveloping() {
-        mutableState.update { it.copy(showDeveloping = false) }
+    fun groupForMembers(): Group? = if (ready() && uiState.value.memberSelectionOpen)
+        uiState.value.groups.firstOrNull { it.id == uiState.value.selectedGroupId && it.id > 0 } else null
+
+    fun returnFromMembers() {
+        if (ready()) mutableState.update { it.copy(memberSelectionOpen = false) }
     }
 
     fun reset() {

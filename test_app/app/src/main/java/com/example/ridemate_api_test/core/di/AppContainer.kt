@@ -25,6 +25,7 @@ import com.example.ridemate_api_test.feature.connection.domain.repository.Connec
 import com.example.ridemate_api_test.feature.home.presentation.HomeViewModel
 import com.example.ridemate_api_test.feature.group.presentation.GroupManagementViewModel
 import com.example.ridemate_api_test.feature.group.presentation.selection.GroupSelectionViewModel
+import com.example.ridemate_api_test.feature.group.presentation.members.MemberSelectionViewModel
 import com.example.ridemate_api_test.feature.group.presentation.requests.GroupJoinRequestsViewModel
 import com.example.ridemate_api_test.feature.group.data.remote.HttpGroupApi
 import com.example.ridemate_api_test.feature.group.data.repository.GroupRepositoryImpl
@@ -45,6 +46,9 @@ class AppContainer(context: Context) {
     private val groupRepository = GroupRepositoryImpl(HttpGroupApi(client, endpoint), session)
     val groupSelectionViewModelFactory = viewModelFactory {
         initializer { GroupSelectionViewModel(groupRepository, authRepository) }
+    }
+    val memberSelectionViewModelFactory = viewModelFactory {
+        initializer { MemberSelectionViewModel(authRepository) }
     }
     val groupJoinRequestsViewModelFactory = viewModelFactory {
         initializer { GroupJoinRequestsViewModel(groupRepository, authRepository) }

@@ -5,6 +5,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.example.ridemate_api_test.feature.auth.presentation.signup.SignupRoute
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ridemate_api_test.feature.home.presentation.HomeRoute
@@ -14,8 +18,10 @@ import com.example.ridemate_api_test.feature.auth.presentation.login.LoginViewMo
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ridemate_api_test.feature.group.presentation.GroupManagementRoute
 import com.example.ridemate_api_test.feature.group.presentation.selection.GroupSelectionRoute
+import com.example.ridemate_api_test.feature.group.presentation.selection.GroupSelectionViewModel
+import com.example.ridemate_api_test.feature.group.presentation.members.MemberSelectionRoute
 
-private enum class AuthenticatedDestination { HOME, GROUPS, GROUP_SELECTION }
+private enum class AuthenticatedDestination { HOME, GROUPS, GROUP_SELECTION, MEMBER_SELECTION }
 
 @Composable
 fun RideMateApp(container: AppContainer) {
@@ -34,7 +40,36 @@ fun RideMateApp(container: AppContainer) {
         }
         when (destination) {
             AuthenticatedDestination.GROUPS -> GroupManagementRoute(container, onBack = backHome)
-            AuthenticatedDestination.GROUP_SELECTION -> GroupSelectionRoute(container, onBack = backHome)
+            AuthenticatedDestination.GROUP_SELECTION, AuthenticatedDestination.MEMBER_SELECTION -> {
+                // This composition survives group/member navigation, but ends on return home/logout.
+                val groupModel: GroupSelectionViewModel = viewModel(factory = container.groupSelectionViewModelFactory)
+                val groupState by groupModel.uiState.collectAsStateWithLifecycle()
+                val groupListState = rememberLazyListState()
+                val activity = LocalActivity.current
+                DisposableEffect(groupModel, activity) {
+                    onDispose { if (activity?.isChangingConfigurations != true) groupModel.reset() }
+                }
+                if (destination == AuthenticatedDestination.MEMBER_SELECTION) {
+                    val group = groupModel.groupForMembers()
+                    if (group != null && groupState.memberSelectionOpen) {
+                        MemberSelectionRoute(container, group, onBack = {
+                            groupModel.returnFromMembers()
+                            destination = AuthenticatedDestination.GROUP_SELECTION
+                        })
+                    } else {
+                        // A process-restored destination cannot restore an old user's selection.
+                        LaunchedEffect(Unit) { destination = AuthenticatedDestination.GROUP_SELECTION }
+                    }
+                } else {
+                    GroupSelectionRoute(groupModel, groupListState, onBack = backHome, onOpenMembers = {
+                        val current = container.authRepository.state.value
+                        if (destination == AuthenticatedDestination.GROUP_SELECTION && current.enteredSession &&
+                            current.user?.id == state.user?.id && groupModel.openMembers() != null) {
+                            destination = AuthenticatedDestination.MEMBER_SELECTION
+                        }
+                    })
+                }
+            }
             AuthenticatedDestination.HOME -> HomeRoute(container,
                 onOpenGroups = { open(AuthenticatedDestination.GROUPS) },
                 onStartRide = { open(AuthenticatedDestination.GROUP_SELECTION) })

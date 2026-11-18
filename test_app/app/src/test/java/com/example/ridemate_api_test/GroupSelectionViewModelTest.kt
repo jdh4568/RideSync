@@ -53,7 +53,7 @@ class GroupSelectionViewModelTest {
     @Test fun repeatedEntryAndRetryDuringLoadingUseOneOwnedQuery() = scenario {
         val gate = CompletableDeferred<Unit>()
         repo.fetch = { gate.await(); groupsForTest() }
-        model.enter(); model.enter(); model.retry(); model.select(1); model.complete()
+        model.enter(); model.enter(); model.retry(); model.select(1); model.openMembers()
         await { repo.calls == 1 }
         assertEquals(GroupSelectionStatus.LOADING, model.uiState.value.status)
         assertFalse(model.uiState.value.canComplete)
@@ -66,16 +66,16 @@ class GroupSelectionViewModelTest {
         assertEquals(1, repo.calls)
     }
 
-    @Test fun actualListSelectionAndDialogNeverTriggerAnotherQueryOrMutation() = scenario {
+    @Test fun actualListHandoffBlocksDuplicateNavigationAndReturnKeepsSelection() = scenario {
         start()
-        model.complete()
-        assertFalse(model.uiState.value.showDeveloping)
+        model.openMembers()
+        assertFalse(model.uiState.value.memberSelectionOpen)
         model.select(1); model.select(2); model.select(999)
         assertEquals(2L, model.uiState.value.selectedGroupId)
-        model.complete(); model.complete(); model.select(1)
-        assertTrue(model.uiState.value.showDeveloping)
+        model.openMembers(); model.openMembers(); model.select(1)
+        assertTrue(model.uiState.value.memberSelectionOpen)
         assertEquals(2L, model.uiState.value.selectedGroupId)
-        model.dismissDeveloping()
+        model.returnFromMembers()
         assertTrue(model.uiState.value.canComplete)
         assertEquals(1, repo.calls)
     }
@@ -102,6 +102,22 @@ class GroupSelectionViewModelTest {
         }
     }
 
+    @Test fun memberRoundTripKeepsOwnedListAndSelectionButHomeExitResetsTheFlow() = scenario {
+        start(); model.select(2)
+        val original = model.uiState.value.groups
+        assertEquals(2L, model.openMembers()?.id)
+        assertNull(model.openMembers())
+        assertEquals(2L, model.groupForMembers()?.id)
+        model.returnFromMembers(); model.enter()
+        assertEquals(original, model.uiState.value.groups)
+        assertEquals(2L, model.uiState.value.selectedGroupId)
+        assertEquals(1, repo.calls)
+        assertNull(model.groupForMembers())
+        model.reset(); start()
+        assertNull(model.uiState.value.selectedGroupId)
+        assertEquals(2, repo.calls)
+    }
+
     @Test fun leavingCancelsRequestAndReentryStartsWithNoSelection() = scenario {
         val gate = CompletableDeferred<Unit>()
         repo.fetch = { gate.await(); groupsForTest() }
@@ -111,11 +127,11 @@ class GroupSelectionViewModelTest {
         await { repo.finished == 1 }
         assertTrue(gate.isActive)
         repo.fetch = { groupsForTest() }
-        start(); model.select(1); model.complete()
+        start(); model.select(1); model.openMembers()
         model.reset(); start()
         assertEquals(3, repo.calls)
         assertNull(model.uiState.value.selectedGroupId)
-        assertFalse(model.uiState.value.showDeveloping)
+        assertFalse(model.uiState.value.memberSelectionOpen)
     }
 
     @Test fun lateSuccessAndLateErrorCannotOverwriteAReenteredScreen() = scenario {
@@ -143,19 +159,19 @@ class GroupSelectionViewModelTest {
     }
 
     @Test fun logoutAndAccountChangeClearContentAndBlockStaleActions() = scenario {
-        start(); model.select(1); model.complete()
+        start(); model.select(1); model.openMembers()
         auth.logout()
-        model.select(2); model.complete(); model.retry(); model.enter()
+        model.select(2); model.openMembers(); model.retry(); model.enter()
         await { model.uiState.value.groups.isEmpty() }
         assertNull(model.uiState.value.selectedGroupId)
-        assertFalse(model.uiState.value.showDeveloping)
+        assertFalse(model.uiState.value.memberSelectionOpen)
         assertEquals(1, repo.calls)
         auth.state.value = AuthState(AuthPhase.CONNECTED, AuthUser(8, "다른 사용자"), true)
         start(); model.select(2)
         auth.state.value = auth.state.value.copy(user = AuthUser(9, "새 사용자"))
-        model.complete()
+        model.openMembers()
         await { model.uiState.value.groups.isEmpty() }
-        assertFalse(model.uiState.value.showDeveloping)
+        assertFalse(model.uiState.value.memberSelectionOpen)
         start()
         assertNull(model.uiState.value.selectedGroupId)
         assertEquals(3, repo.calls)

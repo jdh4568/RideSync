@@ -10,13 +10,13 @@ data class GroupSelectionUiState(
     val groups: List<Group> = emptyList(),
     val selectedGroupId: Long? = null,
     val problem: GroupProblem? = null,
-    val showDeveloping: Boolean = false,
+    val memberSelectionOpen: Boolean = false,
 ) {
-    val canSelect: Boolean get() = status == GroupSelectionStatus.CONTENT && problem == null && !showDeveloping
+    val canSelect: Boolean get() = status == GroupSelectionStatus.CONTENT && problem == null && !memberSelectionOpen
     val canComplete: Boolean get() = canSelect && groups.any { it.id == selectedGroupId }
 
     fun select(groupId: Long): GroupSelectionUiState =
         if (canSelect && groups.any { it.id == groupId }) copy(selectedGroupId = groupId) else this
 
-    fun complete(): GroupSelectionUiState = if (canComplete) copy(showDeveloping = true) else this
+    fun openMembers(): GroupSelectionUiState = if (canComplete) copy(memberSelectionOpen = true) else this
 }
