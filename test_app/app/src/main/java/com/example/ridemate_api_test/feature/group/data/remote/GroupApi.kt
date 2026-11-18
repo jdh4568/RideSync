@@ -15,6 +15,7 @@ import kotlin.coroutines.resumeWithException
 interface GroupApi {
     suspend fun groups(token: String): List<Group>
     suspend fun ownedGroups(token: String): List<Group>
+    suspend fun members(token: String, groupId: Long): GroupMembers
     suspend fun join(token: String, groupId: Long)
     suspend fun create(token: String, request: CreateGroup): CreatedGroup
     suspend fun joinRequests(token: String): List<GroupJoinRequest>
@@ -22,6 +23,27 @@ interface GroupApi {
 }
 
 class HttpGroupApi(private val client: OkHttpClient, private val endpoint: ServerEndpoint) : GroupApi {
+    override suspend fun members(token: String, groupId: Long): GroupMembers {
+        require(groupId > 0)
+        return execute(token, "/api/v1/groups/$groupId/members", null, 200) { body ->
+            val json = JSONObject(body)
+            require(json.integer("groupId") == groupId)
+            val name = json.text("groupName").also { require(it.isNotBlank()) }
+            val description = if (json.has("description") && json.isNull("description")) "" else json.text("description")
+            val array = json.getJSONArray("members")
+            val count = json.integer("memberCount").also { require(it == array.length().toLong()) }.toInt()
+            val members = (0 until array.length()).map { index ->
+                val member = array.getJSONObject(index)
+                GroupMember(member.integer("userId").also { require(it > 0) },
+                    member.text("nickname").also { require(it.isNotBlank()) },
+                    GroupRole.valueOf(member.text("role")),
+                    member.get("online") as? Boolean ?: error("Invalid online type"))
+            }
+            require(members.map { it.userId }.distinct().size == members.size)
+            GroupMembers(groupId, name, description, count, members)
+        }
+    }
+
     override suspend fun joinRequests(token: String): List<GroupJoinRequest> =
         execute(token, "/api/v1/groups/join-requests", null, 200) { body ->
             val array = JSONArray(body)

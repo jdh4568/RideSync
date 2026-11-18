@@ -66,10 +66,11 @@ fun MemberSelectionScreen(
                         Modifier.padding(start = 12.dp, top = 36.dp, bottom = 12.dp).semantics { heading() },
                         fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium)
                 }
-                if (state.status != MemberSelectionStatus.NOT_CONNECTED) item(key = "refresh") {
+                if (state.hasSnapshot || state.status == MemberSelectionStatus.ERROR) item(key = "refresh") {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.member_selection_snapshot), Modifier.weight(1f),
+                        if (state.hasSnapshot) Text(stringResource(R.string.member_selection_snapshot), Modifier.weight(1f),
                             fontSize = 12.sp, lineHeight = 18.sp)
+                        else Spacer(Modifier.weight(1f))
                         TextButton(onClick = onRefresh, enabled = state.canRefresh) {
                             Text(stringResource(R.string.member_selection_refresh))
                         }
@@ -80,8 +81,8 @@ fun MemberSelectionScreen(
                     MemberMessage(stringResource(R.string.member_selection_uncertain))
                 }
                 when (state.status) {
-                    MemberSelectionStatus.NOT_CONNECTED -> item(key = "not-connected") {
-                        MemberMessage(stringResource(R.string.member_selection_not_connected))
+                    MemberSelectionStatus.WAITING_CONNECTION -> item(key = "waiting") {
+                        MemberMessage(stringResource(R.string.member_selection_uncertain))
                     }
                     MemberSelectionStatus.LOADING -> item(key = "loading") {
                         Surface(shape = GroupDesign.Shape, color = Color.White) {
@@ -108,15 +109,18 @@ fun MemberSelectionScreen(
                             if (state.connected && state.snapshotConfirmed && state.members.none { it.online }) item(key = "offline") {
                                 MemberMessage(stringResource(R.string.member_selection_all_offline))
                             }
-                            itemsIndexed(state.members, key = { _, member -> member.userId }) { index, member ->
-                                MemberRow(member, selected = member.userId in state.selectedUserIds,
-                                    enabled = state.canSelect && member.online,
-                                    confirmed = state.connected && state.snapshotConfirmed,
-                                    first = index == 0, last = index == state.members.lastIndex,
-                                    onToggle = { onToggle(member.userId) })
-                            }
                         }
                     }
+                }
+                if (state.hasSnapshot) itemsIndexed(state.members, key = { _, member -> member.userId }) { index, member ->
+                    MemberRow(member, selected = member.userId in state.selectedUserIds,
+                        enabled = state.canSelect && member.online,
+                        confirmed = state.connected && state.snapshotConfirmed,
+                        first = index == 0, last = index == state.members.lastIndex,
+                        onToggle = { onToggle(member.userId) })
+                }
+                if (state.selectionChanged) item(key = "changed") {
+                    MemberMessage(stringResource(R.string.member_selection_changed))
                 }
                 if (state.selectionLimitReached) item(key = "limit") {
                     MemberMessage(stringResource(R.string.member_selection_limit))
@@ -209,7 +213,7 @@ private fun MemberSelectionPreview() {
     HomeTheme {
         MemberSelectionScreen(MemberSelectionUiState(
             group = Group(1, "한강 모임", "한강에서 즐기는 라이딩 동호회", 13, 20, Membership.APPROVED),
-            status = MemberSelectionStatus.CONTENT, connected = true, snapshotConfirmed = true,
+            status = MemberSelectionStatus.CONTENT, connected = true, snapshotConfirmed = true, hasSnapshot = true,
             members = listOf(MemberChoiceUi(2, "홍길동", true), MemberChoiceUi(3, "이순신", false),
                 MemberChoiceUi(4, "장발장", true), MemberChoiceUi(5, "김철수", true)), selectedUserIds = setOf(2)),
             {}, {}, {}, {}, {})

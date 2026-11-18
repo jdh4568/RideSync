@@ -135,7 +135,7 @@
     <string name="member_selection_status_unknown">확인 불가</string>
     <string name="member_selection_snapshot">접속 상태는 마지막 조회 기준입니다.</string>
     <string name="member_selection_refresh">새로고침</string>
-    <string name="member_selection_not_connected">멤버 목록 연결을 준비 중입니다. 연결이 완료되면 멤버를 선택할 수 있습니다.</string>
+    <string name="member_selection_changed">접속 상태 또는 그룹 멤버가 변경되어 일부 선택을 해제했습니다.</string>
     <string name="member_selection_loading">멤버 목록을 불러오는 중입니다.</string>
     <string name="member_selection_empty">함께 라이딩할 멤버가 없습니다.</string>
     <string name="member_selection_all_offline">현재 접속 중인 멤버가 없습니다.</string>

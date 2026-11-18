@@ -19,6 +19,7 @@ class GroupSelectionViewModelTest {
         override fun logout() { state.value = AuthState(phase = AuthPhase.SIGNED_OUT) }
     }
     private class Repository : GroupRepository {
+        override suspend fun members(groupId: Long): GroupMembers = error("Not used")
         var calls = 0
         var finished = 0
         var fetch: suspend () -> List<Group> = { groupsForTest() }

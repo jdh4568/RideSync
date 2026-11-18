@@ -48,7 +48,7 @@ class AppContainer(context: Context) {
         initializer { GroupSelectionViewModel(groupRepository, authRepository) }
     }
     val memberSelectionViewModelFactory = viewModelFactory {
-        initializer { MemberSelectionViewModel(authRepository) }
+        initializer { MemberSelectionViewModel(groupRepository, authRepository) }
     }
     val groupJoinRequestsViewModelFactory = viewModelFactory {
         initializer { GroupJoinRequestsViewModel(groupRepository, authRepository) }

@@ -8,6 +8,7 @@ import com.example.ridemate_api_test.feature.group.domain.repository.GroupReposi
 class GroupRepositoryImpl(private val api: GroupApi, private val session: AuthenticatedSession) : GroupRepository {
     override suspend fun groups() = authorized { api.groups(it) }
     override suspend fun ownedGroups() = authorized { api.ownedGroups(it) }
+    override suspend fun members(groupId: Long) = authorized { api.members(it, groupId) }
     override suspend fun join(groupId: Long) = authorized { api.join(it, groupId) }
     override suspend fun create(request: CreateGroup) = authorized { api.create(it, request) }
     override suspend fun joinRequests() = authorized { api.joinRequests(it) }

@@ -37,6 +37,6 @@ fun MemberSelectionRoute(container: AppContainer, group: Group, onBack: () -> Un
     }
     HomeTheme {
         MemberSelectionScreen(state, leave, model::toggle, model::complete, model::dismissDeveloping,
-            onRefresh = {}) // Disabled until the stage-2 API is connected.
+            onRefresh = model::refresh)
     }
 }

@@ -69,9 +69,10 @@ class MemberSelectionUiStateTest {
         assertTrue(dismissed.canComplete)
     }
 
-    @Test fun emptyAndAllOfflineListsAndApiNotConnectedCannotComplete() {
+    @Test fun emptyAndAllOfflineListsAndWaitingConnectionCannotComplete() {
         assertFalse(content().copy(members = emptyList()).canComplete)
         assertFalse(content().copy(members = listOf(MemberChoiceUi(4, "멤버", false))).toggle(4).canComplete)
         assertFalse(MemberSelectionUiState(group = content().group).canRefresh)
+        assertFalse(content().copy(status = MemberSelectionStatus.WAITING_CONNECTION).canComplete)
     }
 }
