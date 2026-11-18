@@ -13,26 +13,28 @@ import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 @Preview(name = "Leader invitation", showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun LeaderInvitationPreview() {
-    PreviewPanel(InvitationPanel.Leader("preview-leader", InvitationCounts(3, 1, 1, 1), canStart = true))
+    PreviewPanel(InvitationPanel.Leader("preview-leader", InvitationCounts(3, 1, 1, 1), canStart = true,
+        statusConnected = true, fresh = true, actionsConnected = true, startContextKnown = true))
 }
 
 @Preview(name = "Member invitation", showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun MemberInvitationPreview() {
-    PreviewPanel(InvitationPanel.Member("preview-member", "한강 모임", "홍길동"))
+    PreviewPanel(InvitationPanel.Member("preview-member", "한강 모임", "홍길동", fresh = true))
 }
 
 @Preview(name = "Invitation response waiting", showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun InvitationWaitingPreview() {
-    PreviewPanel(InvitationPanel.Member("preview-waiting", "한강 모임", "홍길동", InvitationResponseUi.ACCEPT_SENT))
+    PreviewPanel(InvitationPanel.Member("preview-waiting", "한강 모임", "홍길동", InvitationResponseUi.ACCEPT_SENT,
+        choice = true, fresh = true, responseBlocked = true))
 }
 
 @Composable
-private fun PreviewPanel(panel: InvitationPanel) {
+private fun PreviewPanel(panel: InvitationPanel, actionsAvailable: Boolean = true) {
     HomeTheme {
         Box(Modifier.fillMaxSize().background(Color(0xFFB3B3B3))) {
-            InvitationPlacement { InvitationContent(panel, onHide = {}, actionsAvailable = true) }
+            InvitationPlacement { InvitationContent(panel, onHide = {}, actionsAvailable = actionsAvailable) }
         }
     }
 }

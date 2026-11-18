@@ -13,16 +13,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 import com.example.ridemate_api_test.core.di.AppContainer
 import com.example.ridemate_api_test.feature.group.domain.model.Group
+import com.example.ridemate_api_test.feature.invitation.presentation.InvitationUiState
 
 @Composable
 fun MemberSelectionRoute(container: AppContainer, group: Group, onBack: () -> Unit,
-    onModalVisibilityChanged: (Boolean) -> Unit = {}) {
+    onModalVisibilityChanged: (Boolean) -> Unit = {},
+    creation: InvitationUiState = InvitationUiState(),
+    onCreateInvitation: ((Long, Set<Long>) -> Unit)? = null,
+    onClearCreationFailure: () -> Unit = {}) {
     val model: MemberSelectionViewModel = viewModel(factory = container.memberSelectionViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.showDeveloping) { onModalVisibilityChanged(state.showDeveloping) }
     DisposableEffect(Unit) { onDispose { onModalVisibilityChanged(false) } }
     LaunchedEffect(model, group.id) { model.enter(group) }
-    val leave = { model.reset(); onBack() }
+    val leave = { if (!creation.creating) { onClearCreationFailure(); model.reset(); onBack() } }
     BackHandler(enabled = !state.showDeveloping) { leave() }
     val activity = LocalActivity.current
     val view = LocalView.current
@@ -39,7 +43,12 @@ fun MemberSelectionRoute(container: AppContainer, group: Group, onBack: () -> Un
         }
     }
     HomeTheme {
-        MemberSelectionScreen(state, leave, model::toggle, model::complete, model::dismissDeveloping,
-            onRefresh = model::refresh)
+        MemberSelectionScreen(state, leave,
+            onToggle = { if (!creation.creating) model.toggle(it) },
+            onComplete = {
+                if (onCreateInvitation == null) model.complete()
+                else if (creation.canCreate) model.invitationSelection()?.let { (id, ids) -> onCreateInvitation(id, ids) }
+            }, onDismissDeveloping = model::dismissDeveloping,
+            onRefresh = { if (!creation.creating) model.refresh() }, creation = creation)
     }
 }

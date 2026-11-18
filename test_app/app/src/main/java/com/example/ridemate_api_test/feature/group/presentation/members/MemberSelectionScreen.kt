@@ -34,6 +34,9 @@ import com.example.ridemate_api_test.feature.group.domain.model.Membership
 import com.example.ridemate_api_test.feature.group.presentation.GroupDesign
 import com.example.ridemate_api_test.feature.group.presentation.GroupPrimaryButton
 import com.example.ridemate_api_test.feature.group.presentation.messageResource
+import com.example.ridemate_api_test.feature.invitation.presentation.InvitationUiState
+import com.example.ridemate_api_test.feature.invitation.presentation.creationMessageResource
+import com.example.ridemate_api_test.feature.invitation.domain.model.InvitationProblem
 
 @Composable
 fun MemberSelectionScreen(
@@ -43,6 +46,7 @@ fun MemberSelectionScreen(
     onComplete: () -> Unit,
     onDismissDeveloping: () -> Unit,
     onRefresh: () -> Unit,
+    creation: InvitationUiState = InvitationUiState(),
 ) {
     Box(Modifier.fillMaxSize()) {
         Image(painterResource(R.drawable.login_landscape), null, Modifier.matchParentSize(),
@@ -50,7 +54,7 @@ fun MemberSelectionScreen(
         Column(Modifier.fillMaxSize().safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.widthIn(max = 510.dp).fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack, enabled = !state.showDeveloping) {
+                IconButton(onClick = onBack, enabled = !state.showDeveloping && !creation.creating) {
                     Image(painterResource(R.drawable.group_back), stringResource(R.string.group_back),
                         Modifier.size(18.3715.dp, 10.1213.dp).rotate(90f))
                 }
@@ -71,7 +75,7 @@ fun MemberSelectionScreen(
                         if (state.hasSnapshot) Text(stringResource(R.string.member_selection_snapshot), Modifier.weight(1f),
                             fontSize = 12.sp, lineHeight = 18.sp)
                         else Spacer(Modifier.weight(1f))
-                        TextButton(onClick = onRefresh, enabled = state.canRefresh) {
+                        TextButton(onClick = onRefresh, enabled = state.canRefresh && !creation.creating) {
                             Text(stringResource(R.string.member_selection_refresh))
                         }
                     }
@@ -114,7 +118,7 @@ fun MemberSelectionScreen(
                 }
                 if (state.hasSnapshot) itemsIndexed(state.members, key = { _, member -> member.userId }) { index, member ->
                     MemberRow(member, selected = member.userId in state.selectedUserIds,
-                        enabled = state.canSelect && member.online,
+                        enabled = state.canSelect && member.online && !creation.creating,
                         confirmed = state.connected && state.snapshotConfirmed,
                         first = index == 0, last = index == state.members.lastIndex,
                         onToggle = { onToggle(member.userId) })
@@ -125,6 +129,13 @@ fun MemberSelectionScreen(
                 if (state.selectionLimitReached) item(key = "limit") {
                     MemberMessage(stringResource(R.string.member_selection_limit))
                 }
+                creation.creationProblem?.let { problem -> item(key = "invitation_error") {
+                    MemberMessage(stringResource(if (creation.creationUncertain) R.string.invitation_create_uncertain
+                        else problem.creationMessageResource()))
+                    if (problem in setOf(InvitationProblem.FORBIDDEN, InvitationProblem.GROUP_NOT_FOUND)) {
+                        TextButton(onClick = onBack) { Text(stringResource(R.string.member_selection_back_to_groups)) }
+                    }
+                } }
             }
             Column(Modifier.widthIn(max = 510.dp).fillMaxWidth().padding(start = 23.dp, end = 23.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
@@ -132,7 +143,11 @@ fun MemberSelectionScreen(
                     Text(stringResource(R.string.member_selection_required), Modifier.padding(bottom = 8.dp),
                         fontSize = 13.sp, textAlign = TextAlign.Center)
                 }
-                GroupPrimaryButton(onComplete, Modifier.fillMaxWidth(), enabled = state.canComplete) {
+                if (creation.creating) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                    Text(stringResource(R.string.invitation_creating), Modifier.padding(bottom = 8.dp))
+                }
+                GroupPrimaryButton(onComplete, Modifier.fillMaxWidth(), enabled = state.canComplete && creation.canCreate) {
                     Text(stringResource(R.string.group_selection_complete), fontSize = 15.sp)
                 }
             }

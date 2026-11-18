@@ -39,6 +39,15 @@ fun RideMateApp(container: AppContainer) {
         var destination by rememberSaveable(state.user?.id) { mutableStateOf(AuthenticatedDestination.HOME) }
         val invitationModel: InvitationViewModel = viewModel(factory = container.invitationViewModelFactory)
         val invitations by invitationModel.uiState.collectAsStateWithLifecycle()
+        LaunchedEffect(invitations.createdInvitationId) {
+            invitations.createdInvitationId?.let { id ->
+                if (container.authRepository.state.value.enteredSession &&
+                    container.authRepository.state.value.user?.id == state.user?.id) {
+                    destination = AuthenticatedDestination.HOME
+                    invitationModel.consumeNavigation(id)
+                }
+            }
+        }
         var localModalOpen by remember(state.user?.id, destination) { mutableStateOf(false) }
         val activeRide = invitations.ride
         if (invitations.rideOpen && activeRide != null) {
@@ -72,7 +81,12 @@ fun RideMateApp(container: AppContainer) {
                         MemberSelectionRoute(container, group, onBack = {
                             groupModel.returnFromMembers()
                             destination = AuthenticatedDestination.GROUP_SELECTION
-                        }, onModalVisibilityChanged = { localModalOpen = it })
+                        }, onModalVisibilityChanged = { localModalOpen = it },
+                            creation = invitations, onCreateInvitation = { id, ids ->
+                                if (destination == AuthenticatedDestination.MEMBER_SELECTION)
+                                    invitationModel.create(id, ids)
+                            },
+                            onClearCreationFailure = invitationModel::clearCreationFailure)
                     } else {
                         // A process-restored destination cannot restore an old user's selection.
                         LaunchedEffect(Unit) { destination = AuthenticatedDestination.GROUP_SELECTION }
@@ -95,8 +109,11 @@ fun RideMateApp(container: AppContainer) {
                     InvitationHomeActions(invitations, invitationModel::reopen, invitationModel::openRide)
                 })
         }
-        InvitationRoute(invitations, blockedByOtherModal = localModalOpen,
-            onHide = invitationModel::hidePanel)
+        InvitationRoute(invitations, blockedByOtherModal = localModalOpen || invitations.creating ||
+            (destination == AuthenticatedDestination.MEMBER_SELECTION && invitations.createdInvitationId != null),
+            onHide = invitationModel::hidePanel, onRespond = invitationModel::respond,
+            onStart = invitationModel::start, onCancel = invitationModel::cancel,
+            onDismissNotice = invitationModel::dismissNotice)
     } else if (showSignup && !state.isBusy && state.user == null) {
         SignupRoute(container, onBack = { showSignup = false }, onSuccess = {
             loginModel.onSignupCompleted(it)

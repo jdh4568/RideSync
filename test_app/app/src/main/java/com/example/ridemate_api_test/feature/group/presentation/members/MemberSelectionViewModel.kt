@@ -112,6 +112,11 @@ class MemberSelectionViewModel(
 
     fun toggle(userId: Long) { if (connected()) mutableState.update { it.toggle(userId) } }
     fun complete() { if (connected()) mutableState.update { it.complete() } }
+    fun invitationSelection(): Pair<Long, Set<Long>>? {
+        val current = uiState.value
+        if (!connected() || !current.canComplete) return null
+        return (current.group?.id ?: return null) to current.selectedUserIds.toSet()
+    }
     fun dismissDeveloping() { mutableState.update { it.copy(showDeveloping = false) } }
 
     private fun cancelLoad() {

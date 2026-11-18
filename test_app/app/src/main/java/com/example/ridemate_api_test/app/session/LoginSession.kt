@@ -9,6 +9,8 @@ import com.example.ridemate_api_test.feature.auth.domain.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /** App-owned session. Commands and event handling are serialized on the supplied main scope. */
 class LoginSession(
@@ -18,7 +20,7 @@ class LoginSession(
     private val scope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,
     private val retryDelays: List<Long> = listOf(1_000, 2_000, 4_000),
-) : AuthenticatedSession {
+) : AuthenticatedSession, LoginMessageChannel {
     private val mutableState = MutableStateFlow(AuthState())
     val state = mutableState.asStateFlow()
     private var credentials: AuthCredentials? = null
@@ -31,6 +33,17 @@ class LoginSession(
     private var cleanupJob: Job? = null
     private var foreground = true
     private var retryCount = 0
+    private val mutableMessages = MutableSharedFlow<LoginTextMessage>()
+    override val messages = mutableMessages.asSharedFlow()
+    override val sessionVersion: Long get() = generation
+    override val identity: LoginSocketIdentity? get() = credentials?.takeIf {
+        foreground && state.value.phase == AuthPhase.CONNECTED && it.expiresAtMillis > now()
+    }?.let { LoginSocketIdentity(it.user.id, generation, connectionId) }
+
+    override fun send(text: String): Boolean {
+        if (identity == null || text.isBlank()) return false
+        return connection?.send(text) == true
+    }
 
     init {
         cleanupJob = scope.launch {
@@ -174,6 +187,10 @@ class LoginSession(
                             mutableState.value = state.value.copy(phase = AuthPhase.CONNECTED, enteredSession = true, problem = null)
                         }
                         is SocketEvent.Failed -> onConnectionFailure(event.problem)
+                        is SocketEvent.Text -> {
+                            val currentIdentity = identity ?: return@launch
+                            mutableMessages.emit(LoginTextMessage(currentIdentity, event.text))
+                        }
                     }
                 }
             }

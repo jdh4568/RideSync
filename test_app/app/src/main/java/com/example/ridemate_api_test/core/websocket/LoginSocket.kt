@@ -8,8 +8,12 @@ import okio.ByteString
 sealed interface SocketEvent {
     data object Open : SocketEvent
     data class Failed(val problem: AuthProblem) : SocketEvent
+    data class Text(val text: String) : SocketEvent
 }
-fun interface SocketConnection { fun cancel() }
+fun interface SocketConnection {
+    fun cancel()
+    fun send(text: String): Boolean = false
+}
 interface LoginSocket { fun connect(token: String, onEvent: (SocketEvent) -> Unit): SocketConnection }
 
 class OkHttpLoginSocket(private val client: OkHttpClient, private val endpoint: ServerEndpoint) : LoginSocket {
@@ -30,11 +34,14 @@ class OkHttpLoginSocket(private val client: OkHttpClient, private val endpoint: 
                 webSocket.close(code, null)
                 onEvent(SocketEvent.Failed(if (code == 1008) AuthProblem.EXPIRED else AuthProblem.NETWORK))
             }
-            // Invitation UI is a later stage. Unknown, malformed and binary messages are ignored.
-            override fun onMessage(webSocket: WebSocket, text: String) = Unit
+            // Feature parsers decide which application messages are supported.
+            override fun onMessage(webSocket: WebSocket, text: String) { onEvent(SocketEvent.Text(text)) }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) = Unit
         })
         // Logout/background must not wait for the peer's close acknowledgement.
-        return SocketConnection { socket.cancel() }
+        return object : SocketConnection {
+            override fun cancel() = socket.cancel()
+            override fun send(text: String): Boolean = socket.send(text)
+        }
     }
 }

@@ -84,6 +84,23 @@ class MemberSelectionViewModelTest {
         assertTrue(model.uiState.value.canComplete)
     }
 
+    @Test fun invitationHandoffUsesCurrentConfirmedSelectionAndRejectsStaleSnapshots() = scenario {
+        start()
+        assertNull(model.invitationSelection())
+        model.toggle(2)
+        val captured = model.invitationSelection()
+        assertEquals(1L to setOf(2L), captured)
+        model.toggle(2)
+        assertNull(model.invitationSelection())
+        assertEquals(setOf(2L), captured?.second)
+        model.toggle(2)
+        auth.state.value = auth.state.value.copy(phase = AuthPhase.DISCONNECTED)
+        await { !model.uiState.value.connected }
+        assertNull(model.invitationSelection())
+        model.reset()
+        assertNull(model.invitationSelection())
+    }
+
     @Test fun refreshPreservesOnlyStillOnlinePresentSelectionsAndReportsRemoval() = scenario {
         repo.fetch = { snapshot(it, choices = listOf(member(2), member(3), member(4))) }
         start(); model.toggle(2); model.toggle(3); model.toggle(4)

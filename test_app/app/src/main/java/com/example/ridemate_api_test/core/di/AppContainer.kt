@@ -24,6 +24,8 @@ import com.example.ridemate_api_test.feature.connection.data.repository.Connecti
 import com.example.ridemate_api_test.feature.connection.domain.repository.ConnectionRepository
 import com.example.ridemate_api_test.feature.home.presentation.HomeViewModel
 import com.example.ridemate_api_test.feature.invitation.presentation.InvitationViewModel
+import com.example.ridemate_api_test.feature.invitation.data.remote.HttpInvitationApi
+import com.example.ridemate_api_test.feature.invitation.data.repository.InvitationRepositoryImpl
 import com.example.ridemate_api_test.feature.group.presentation.GroupManagementViewModel
 import com.example.ridemate_api_test.feature.group.presentation.selection.GroupSelectionViewModel
 import com.example.ridemate_api_test.feature.group.presentation.members.MemberSelectionViewModel
@@ -39,12 +41,17 @@ class AppContainer(context: Context) {
         .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build()
     private val socketClient = client.newBuilder().callTimeout(0, TimeUnit.SECONDS)
         .pingInterval(30, TimeUnit.SECONDS).build()
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val session = LoginSession(HttpAuthApi(client, endpoint), KeystoreTokenStore(context.applicationContext),
-        OkHttpLoginSocket(socketClient, endpoint), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+        OkHttpLoginSocket(socketClient, endpoint), appScope)
     val authRepository: AuthRepository = AuthRepositoryImpl(session)
+    private val invitationRepository = InvitationRepositoryImpl(HttpInvitationApi(client, endpoint), session,
+        authRepository, session, appScope)
     val loginViewModelFactory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
     val homeViewModelFactory = viewModelFactory { initializer { HomeViewModel(authRepository) } }
-    val invitationViewModelFactory = viewModelFactory { initializer { InvitationViewModel(authRepository) } }
+    val invitationViewModelFactory = viewModelFactory {
+        initializer { InvitationViewModel(authRepository, repository = invitationRepository) }
+    }
     private val groupRepository = GroupRepositoryImpl(HttpGroupApi(client, endpoint), session)
     val groupSelectionViewModelFactory = viewModelFactory {
         initializer { GroupSelectionViewModel(groupRepository, authRepository) }

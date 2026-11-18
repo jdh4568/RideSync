@@ -11,10 +11,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LoginSocketTest {
-    @Test fun sendsBearerHeaderAndAnswersServerPingWithoutParsingUnknownMessages() = runBlocking {
+    @Test fun forwardsTextSendsOnTheSameSocketAndAnswersServerPing() = runBlocking {
         ServerSocket(0).use { server ->
             val client = OkHttpClient()
             val opened = CompletableDeferred<Unit>()
+            val sendReady = CompletableDeferred<Unit>()
+            val receivedText = CompletableDeferred<String>()
             val exchange = async(Dispatchers.IO) {
                 server.soTimeout = 4_000
                 server.accept().use { peer ->
@@ -37,8 +39,9 @@ class LoginSocketTest {
                         "Sec-WebSocket-Accept: $accept\r\n\r\n").toByteArray(Charsets.US_ASCII))
                     output.flush()
                     opened.await()
-                    // Malformed application JSON is just ignored; protocol Ping is still handled.
+                    // Transport forwards text; the feature parser ignores malformed JSON.
                     output.write(byteArrayOf(0x81.toByte(), 1, '{'.code.toByte()))
+                    output.write(byteArrayOf(0x82.toByte(), 1, 65)) // Binary is ignored.
                     output.write(byteArrayOf(0x89.toByte(), 2, 79, 75))
                     output.flush()
                     assertEquals(0x8A, input.read()) // Pong
@@ -47,11 +50,25 @@ class LoginSocketTest {
                     val mask = ByteArray(4).also { bytes -> repeat(4) { bytes[it] = input.read().toByte() } }
                     val payload = ByteArray(2) { (input.read() xor mask[it].toInt()).toByte() }
                     assertArrayEquals(byteArrayOf(79, 75), payload)
+                    sendReady.complete(Unit)
+                    assertEquals(0x81, input.read())
+                    assertEquals(0x87, input.read())
+                    val textMask = ByteArray(4).also { bytes -> repeat(4) { bytes[it] = input.read().toByte() } }
+                    val textPayload = ByteArray(7) { (input.read() xor textMask[it % 4].toInt()).toByte() }
+                    assertEquals("fixture", String(textPayload, Charsets.UTF_8))
                 }
             }
             val link = OkHttpLoginSocket(client, ServerEndpoint("http://127.0.0.1:${server.localPort}", true))
-                .connect("fixture-token") { event -> if (event == SocketEvent.Open) opened.complete(Unit) }
-            try { withTimeout(5_000) { exchange.await() } }
+                .connect("fixture-token") { event ->
+                    if (event == SocketEvent.Open) opened.complete(Unit)
+                    if (event is SocketEvent.Text) receivedText.complete(event.text)
+                }
+            try { withTimeout(5_000) {
+                sendReady.await()
+                assertEquals("{", receivedText.await())
+                assertTrue(link.send("fixture"))
+                exchange.await()
+            } }
             finally { link.cancel(); client.dispatcher.executorService.shutdownNow(); client.connectionPool.evictAll() }
         }
     }

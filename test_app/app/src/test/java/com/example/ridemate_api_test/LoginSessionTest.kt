@@ -45,7 +45,13 @@ class LoginSessionTest {
         val connections = mutableListOf<Link>()
         class Link(val notify: (SocketEvent) -> Unit) : SocketConnection {
             var cancelled = false
+            val sent = mutableListOf<String>()
             override fun cancel() { cancelled = true }
+            override fun send(text: String): Boolean {
+                if (cancelled) return false
+                sent += text
+                return true
+            }
         }
         override fun connect(token: String, onEvent: (SocketEvent) -> Unit): SocketConnection {
             check(store.value != null) // Persistence must finish before handshake starts.
@@ -88,6 +94,36 @@ class LoginSessionTest {
         assertEquals(AuthProblem.EXPIRED, session.state.value.problem)
         assertFalse(session.state.value.enteredSession)
         assertTrue(sockets.connections.last().cancelled)
+    }
+
+    @Test fun messagesAndSendingUseOnlyTheCurrentForegroundAuthenticatedConnection() = scenario {
+        val received = mutableListOf<LoginTextMessage>()
+        val observer = scope.launch(start = CoroutineStart.UNDISPATCHED) { session.messages.collect { received += it } }
+        start()
+        val old = sockets.connections.last()
+        assertFalse(session.send("fixture"))
+        old.notify(SocketEvent.Open)
+        await { session.identity != null }
+        val firstIdentity = session.identity
+        assertTrue(session.send("fixture"))
+        assertEquals(listOf("fixture"), old.sent)
+        old.notify(SocketEvent.Text("first"))
+        await { received.size == 1 }
+        assertEquals(firstIdentity, received.single().identity)
+        session.setForeground(false)
+        assertFalse(session.send("blocked"))
+        old.notify(SocketEvent.Text("stale"))
+        session.setForeground(true)
+        await { sockets.connections.size == 2 }
+        sockets.connections.last().notify(SocketEvent.Open)
+        await { session.identity != null }
+        sockets.connections.last().notify(SocketEvent.Text("new"))
+        await { received.size == 2 }
+        assertNotEquals(firstIdentity, received.last().identity)
+        assertEquals(listOf("first", "new"), received.map { it.text })
+        session.logout()
+        assertFalse(session.send("blocked"))
+        observer.cancel()
     }
 
     @Test fun lateProtectedRequestCannotReturnDataOrExpireANewerSession() = scenario {

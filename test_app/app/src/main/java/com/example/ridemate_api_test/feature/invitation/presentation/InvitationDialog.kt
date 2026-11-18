@@ -23,18 +23,22 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ridemate_api_test.R
+import com.example.ridemate_api_test.feature.invitation.domain.model.InvitationProblem
 
 private val ActionBlue = Color(0xFF0683EA)
 private val PanelTile = Color(0xFFF5F5F5)
 
 @Composable
-internal fun InvitationDialog(panel: InvitationPanel, onHide: () -> Unit) {
+internal fun InvitationDialog(panel: InvitationPanel, onHide: () -> Unit,
+    onAccept: () -> Unit = {}, onReject: () -> Unit = {}, onStart: () -> Unit = {}, onCancel: () -> Unit = {}) {
     Dialog(onDismissRequest = onHide, properties = DialogProperties(
         dismissOnBackPress = true, dismissOnClickOutside = false,
         usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
     )) {
         InvitationPlacement {
-            InvitationContent(panel, onHide = onHide)
+            InvitationContent(panel, onHide = onHide, actionsAvailable = panel is InvitationPanel.Member ||
+                (panel is InvitationPanel.Leader && panel.actionsConnected),
+                onAccept = onAccept, onReject = onReject, onStart = onStart, onCancel = onCancel)
         }
     }
 }
@@ -47,7 +51,7 @@ internal fun InvitationPlacement(content: @Composable () -> Unit) {
     }
 }
 
-/** No networking. Stage 1 Route leaves actions unavailable; Preview may render enabled buttons. */
+/** No networking; callbacks are supplied by the authenticated Route. */
 @Composable
 internal fun InvitationContent(
     panel: InvitationPanel,
@@ -104,20 +108,52 @@ internal fun InvitationContent(
             }
             if (!actionsAvailable) {
                 Spacer(Modifier.height(12.dp))
-                Text(stringResource(R.string.invitation_not_connected), fontSize = 13.sp, lineHeight = 19.sp,
+                Text(stringResource(if (leader?.statusConnected == true) R.string.invitation_status_uncertain
+                    else R.string.invitation_not_connected), fontSize = 13.sp, lineHeight = 19.sp,
                     color = Color(0xFF666262), textAlign = TextAlign.Center)
+            }
+            if (leader?.statusConnected == true && !leader.fresh) {
+                Text(stringResource(R.string.invitation_status_uncertain), fontSize = 13.sp, lineHeight = 19.sp,
+                    textAlign = TextAlign.Center)
+            }
+            if (leader?.socketError == true) {
+                Text(stringResource(R.string.invitation_socket_error), fontSize = 13.sp, lineHeight = 19.sp,
+                    textAlign = TextAlign.Center)
+            }
+            leader?.actionProblem?.let { problem ->
+                Text(stringResource(problem.actionMessageResource()), fontSize = 13.sp, textAlign = TextAlign.Center)
+            }
+            if (member != null) {
+                if (!member.fresh) Text(stringResource(R.string.invitation_member_stale), fontSize = 13.sp)
+                if (member.choice != null && member.fresh &&
+                    member.response in setOf(InvitationResponseUi.READY, InvitationResponseUi.FAILED))
+                    Text(stringResource(R.string.invitation_same_response_only), fontSize = 13.sp)
+                if (member.responseBlocked && member.response in setOf(InvitationResponseUi.READY, InvitationResponseUi.FAILED))
+                    Text(stringResource(R.string.invitation_other_response_blocked), fontSize = 13.sp)
+                member.socketErrorCode?.let { code ->
+                    Text(stringResource(when (code) {
+                        "INVITATION_NOT_FOUND" -> R.string.invitation_error_not_found_unattributed
+                        "INVITATION_RESPONSE_CONFLICT" -> R.string.invitation_error_conflict_unattributed
+                        else -> R.string.invitation_socket_error
+                    }), fontSize = 13.sp)
+                }
             }
             if (leader?.busy == true || member?.response == InvitationResponseUi.SENDING) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
             }
             Spacer(Modifier.height(16.dp))
-            val responding = member?.response == InvitationResponseUi.READY || member?.response == InvitationResponseUi.FAILED
+            val responding = member != null && member.fresh && !member.responseBlocked &&
+                member.response in setOf(InvitationResponseUi.READY, InvitationResponseUi.FAILED)
             val secondaryLabel = stringResource(if (leader != null) R.string.invitation_cancel else R.string.invitation_reject)
             val primaryLabel = stringResource(if (leader != null) R.string.invitation_start else R.string.invitation_accept)
+            val leaderAllowed = leader != null && !leader.busy && !leader.actionUncertain &&
+                leader.actionProblem !in setOf(InvitationProblem.INVITATION_NOT_FOUND, InvitationProblem.FORBIDDEN, InvitationProblem.GROUP_NOT_FOUND)
             ActionButtons(
                 secondaryLabel, primaryLabel,
-                secondaryEnabled = actionsAvailable && if (leader != null) !leader.busy else responding,
-                primaryEnabled = actionsAvailable && if (leader != null) !leader.busy && leader.canStart && leader.counts != null else responding,
+                secondaryEnabled = actionsAvailable && if (leader != null) leaderAllowed else responding && member?.choice != true,
+                primaryEnabled = actionsAvailable && if (leader != null) leaderAllowed && leader.startContextKnown &&
+                    leader.actionProblem != InvitationProblem.INVALID_PARTICIPANT && leader.canStart &&
+                    leader.counts != null && (!leader.statusConnected || leader.fresh) else responding && member?.choice != false,
                 onSecondary = if (leader != null) onCancel else onReject,
                 onPrimary = if (leader != null) onStart else onAccept,
             )
