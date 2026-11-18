@@ -15,9 +15,12 @@ import com.example.ridemate_api_test.core.di.AppContainer
 import com.example.ridemate_api_test.feature.group.domain.model.Group
 
 @Composable
-fun MemberSelectionRoute(container: AppContainer, group: Group, onBack: () -> Unit) {
+fun MemberSelectionRoute(container: AppContainer, group: Group, onBack: () -> Unit,
+    onModalVisibilityChanged: (Boolean) -> Unit = {}) {
     val model: MemberSelectionViewModel = viewModel(factory = container.memberSelectionViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(state.showDeveloping) { onModalVisibilityChanged(state.showDeveloping) }
+    DisposableEffect(Unit) { onDispose { onModalVisibilityChanged(false) } }
     LaunchedEffect(model, group.id) { model.enter(group) }
     val leave = { model.reset(); onBack() }
     BackHandler(enabled = !state.showDeveloping) { leave() }

@@ -14,9 +14,12 @@ import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 import com.example.ridemate_api_test.core.di.AppContainer
 
 @Composable
-fun GroupManagementRoute(container: AppContainer, onBack: () -> Unit) {
+fun GroupManagementRoute(container: AppContainer, onBack: () -> Unit,
+    onModalVisibilityChanged: (Boolean) -> Unit = {}) {
     val model: GroupManagementViewModel = viewModel(factory = container.groupManagementViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(state.showCreation) { onModalVisibilityChanged(state.showCreation) }
+    DisposableEffect(Unit) { onDispose { onModalVisibilityChanged(false) } }
     LaunchedEffect(model) { model.enter() }
     val leave = { model.reset(); onBack() }
     BackHandler(enabled = !state.showCreation) { leave() }

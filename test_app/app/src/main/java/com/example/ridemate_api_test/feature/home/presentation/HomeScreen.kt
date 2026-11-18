@@ -37,6 +37,8 @@ import com.example.ridemate_api_test.core.designsystem.theme.HomeTheme
 import com.example.ridemate_api_test.core.designsystem.theme.LoginDesign
 import com.example.ridemate_api_test.feature.auth.domain.model.AuthProblem
 import com.example.ridemate_api_test.feature.auth.presentation.login.messageResource
+import com.example.ridemate_api_test.feature.invitation.presentation.InvitationHomeActions
+import com.example.ridemate_api_test.feature.invitation.presentation.InvitationUiState
 
 @Composable
 fun HomeScreen(
@@ -45,6 +47,7 @@ fun HomeScreen(
     onDismissNotice: () -> Unit,
     onRetryConnection: () -> Unit,
     onLogout: () -> Unit,
+    invitationActions: @Composable () -> Unit = {},
 ) {
     Box(Modifier.fillMaxSize()) {
         Image(painterResource(R.drawable.login_landscape), null, Modifier.matchParentSize(),
@@ -82,6 +85,7 @@ fun HomeScreen(
                         ActionCard(false, Modifier.weight(1f)) { onNotice(HomeNotice.GROUPS) }
                     }
                 }
+                invitationActions()
                 Spacer(Modifier.height(34.dp))
                 StatisticsPanel(state.statistics, stack)
                 Spacer(Modifier.height(16.dp))
@@ -246,6 +250,7 @@ private fun HomePreview() {
     var state by remember { mutableStateOf(HomeUiState(connectionStatus = HomeConnectionStatus.CONNECTED)) }
     HomeTheme {
         HomeScreen(state, { state = state.copy(notice = it) },
-            { state = state.copy(notice = null) }, {}, {})
+            { state = state.copy(notice = null) }, {}, {},
+            invitationActions = { InvitationHomeActions(InvitationUiState(), {}, {}) })
     }
 }

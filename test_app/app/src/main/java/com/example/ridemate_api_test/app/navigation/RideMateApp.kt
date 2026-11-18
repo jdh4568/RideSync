@@ -20,6 +20,11 @@ import com.example.ridemate_api_test.feature.group.presentation.GroupManagementR
 import com.example.ridemate_api_test.feature.group.presentation.selection.GroupSelectionRoute
 import com.example.ridemate_api_test.feature.group.presentation.selection.GroupSelectionViewModel
 import com.example.ridemate_api_test.feature.group.presentation.members.MemberSelectionRoute
+import com.example.ridemate_api_test.feature.invitation.presentation.InvitationViewModel
+import com.example.ridemate_api_test.feature.invitation.presentation.InvitationRoute
+import com.example.ridemate_api_test.feature.invitation.presentation.InvitationHomeActions
+import com.example.ridemate_api_test.feature.ride.presentation.RideRoute
+import androidx.compose.runtime.remember
 
 private enum class AuthenticatedDestination { HOME, GROUPS, GROUP_SELECTION, MEMBER_SELECTION }
 
@@ -32,6 +37,17 @@ fun RideMateApp(container: AppContainer) {
     if (state.enteredSession) {
         // This state belongs only to the current authenticated composition/user.
         var destination by rememberSaveable(state.user?.id) { mutableStateOf(AuthenticatedDestination.HOME) }
+        val invitationModel: InvitationViewModel = viewModel(factory = container.invitationViewModelFactory)
+        val invitations by invitationModel.uiState.collectAsStateWithLifecycle()
+        var localModalOpen by remember(state.user?.id, destination) { mutableStateOf(false) }
+        val activeRide = invitations.ride
+        if (invitations.rideOpen && activeRide != null) {
+            RideRoute(activeRide, onBackHome = {
+                invitationModel.backHome()
+                destination = AuthenticatedDestination.HOME
+            })
+            return
+        }
         val backHome = { destination = AuthenticatedDestination.HOME }
         val open = { target: AuthenticatedDestination ->
             if (container.authRepository.state.value.enteredSession &&
@@ -39,7 +55,8 @@ fun RideMateApp(container: AppContainer) {
                 destination == AuthenticatedDestination.HOME) destination = target
         }
         when (destination) {
-            AuthenticatedDestination.GROUPS -> GroupManagementRoute(container, onBack = backHome)
+            AuthenticatedDestination.GROUPS -> GroupManagementRoute(container, onBack = backHome,
+                onModalVisibilityChanged = { localModalOpen = it })
             AuthenticatedDestination.GROUP_SELECTION, AuthenticatedDestination.MEMBER_SELECTION -> {
                 // This composition survives group/member navigation, but ends on return home/logout.
                 val groupModel: GroupSelectionViewModel = viewModel(factory = container.groupSelectionViewModelFactory)
@@ -55,7 +72,7 @@ fun RideMateApp(container: AppContainer) {
                         MemberSelectionRoute(container, group, onBack = {
                             groupModel.returnFromMembers()
                             destination = AuthenticatedDestination.GROUP_SELECTION
-                        })
+                        }, onModalVisibilityChanged = { localModalOpen = it })
                     } else {
                         // A process-restored destination cannot restore an old user's selection.
                         LaunchedEffect(Unit) { destination = AuthenticatedDestination.GROUP_SELECTION }
@@ -72,8 +89,14 @@ fun RideMateApp(container: AppContainer) {
             }
             AuthenticatedDestination.HOME -> HomeRoute(container,
                 onOpenGroups = { open(AuthenticatedDestination.GROUPS) },
-                onStartRide = { open(AuthenticatedDestination.GROUP_SELECTION) })
+                onStartRide = { open(AuthenticatedDestination.GROUP_SELECTION) },
+                onModalVisibilityChanged = { localModalOpen = it },
+                invitationActions = {
+                    InvitationHomeActions(invitations, invitationModel::reopen, invitationModel::openRide)
+                })
         }
+        InvitationRoute(invitations, blockedByOtherModal = localModalOpen,
+            onHide = invitationModel::hidePanel)
     } else if (showSignup && !state.isBusy && state.user == null) {
         SignupRoute(container, onBack = { showSignup = false }, onSuccess = {
             loginModel.onSignupCompleted(it)

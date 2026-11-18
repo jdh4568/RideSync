@@ -2,6 +2,7 @@ package com.example.ridemate_api_test.feature.home.presentation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.platform.LocalView
@@ -13,9 +14,15 @@ import com.example.ridemate_api_test.core.di.AppContainer
 import com.example.ridemate_api_test.feature.group.presentation.requests.GroupJoinRequestsRoute
 
 @Composable
-fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit, onStartRide: () -> Unit) {
+fun HomeRoute(
+    container: AppContainer, onOpenGroups: () -> Unit, onStartRide: () -> Unit,
+    onModalVisibilityChanged: (Boolean) -> Unit = {},
+    invitationActions: @Composable () -> Unit = {},
+) {
     val model: HomeViewModel = viewModel(factory = container.homeViewModelFactory)
     val state by model.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(state.notice) { onModalVisibilityChanged(state.notice != null) }
+    DisposableEffect(Unit) { onDispose { onModalVisibilityChanged(false) } }
     val activity = LocalActivity.current
     val view = LocalView.current
     DisposableEffect(activity, view) {
@@ -38,7 +45,7 @@ fun HomeRoute(container: AppContainer, onOpenGroups: () -> Unit, onStartRide: ()
                     else -> model.showNotice(notice)
                 }
             }
-        }, model::dismissNotice, model::retryConnection, model::logout)
+        }, model::dismissNotice, model::retryConnection, model::logout, invitationActions)
         GroupJoinRequestsRoute(container, visible = state.notice == HomeNotice.NOTIFICATIONS,
             onDismiss = model::dismissNotice)
     }
