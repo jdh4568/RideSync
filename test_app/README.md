@@ -17,6 +17,29 @@ Kotlin / Jetpack Compose 앱. 단일 app 모듈에서 feature-first + MVVM + Rep
 
 기능별 presentation에는 Route, Screen, ViewModel, UiState를 둡니다. domain에는 모델과 Repository 인터페이스를, data에는 API/DTO 및 Repository 구현을 둡니다. 추가 local/mapper/usecase/service 패키지는 실제 필요할 때 생성합니다. 빈 패키지는 Git에서 유지되도록 .gitkeep을 사용합니다.
 
+## 프론트 UI 구현 현황 (Figma + UI API 스펙 기준)
+
+현재 단계는 **정적 UI + 로컬 더미 데이터**입니다. REST/WebSocket 연동, 로그인 세션, 위치·속도 수집은 아직 연결하지 않았으며, 화면 구조·컴포넌트·상태 표시만 스펙에 맞춰 구현했습니다.
+
+구현 화면:
+
+- `feature/auth`: 로그인, 회원가입(아이디 중복 확인 UI, 유효성 메시지).
+- `feature/home`: 홈(라이딩 시작 / 그룹 관리 카드, 주행 기록 통계, 최근 라이딩 목록), 알림 내역 다이얼로그, 라이딩 참여 요청 다이얼로그.
+- `feature/group`: 그룹 목록(가입 신청 / 신청중 / 가입됨 상태 버튼), 그룹 생성 다이얼로그, 가입 요청 승낙·거절 다이얼로그.
+- `feature/invitation`: 그룹 선택(라디오), 멤버 선택(온라인·오프라인, 체크박스), 라이딩 요청 대기 다이얼로그(요청/수락/대기/거절 통계, 취소 확인), 참여 요청 다이얼로그.
+- `feature/ride`: 선두 화면(주의·방향·대열·속도 신호 버튼, 속도/거리 카드, 종료 버튼), 후미 화면(신호 경고 카드, 최근 신호 목록, 음성·진동 토글, 속도/거리 카드).
+
+공통 UI는 `core/designsystem`에 모아 두었습니다: 색상/타이포 테마, 배경 월페이퍼, 브랜드 로고, 입력창, 버튼, 카드, 상단 툴바, 다이얼로그 골격. 문구는 `res/values/strings.xml`에 한국어로 정의했습니다.
+
+내비게이션은 현재 단일 Activity + Compose 상태 백스택(`app/navigation/Route.kt`)으로 동작합니다. 향후 API 연동 시 각 feature에 ViewModel/Repository를 붙이고, 필요하면 Navigation Compose로 교체할 수 있도록 라우트만 분리해 두었습니다.
+
+미연동 항목(다음 단계):
+
+- 회원가입/로그인/세션 저장, 아이디 중복 확인 실제 호출.
+- 그룹 목록·생성·가입 신청·승낙/거절 API.
+- 라이딩 초대 생성·수락/거절 WebSocket, 신호 송수신, 실시간 속도·거리·멤버 수 집계.
+- 후미 화면의 실제 신호 수신 렌더링과 음성/진동 설정 저장.
+
 ## USB 실기기 실행
 
 1. Android Studio에서 이 test_app 디렉터리를 열고 Gradle Sync를 완료합니다.
